@@ -25,6 +25,8 @@ public :
 	glm::vec3 getPosInObject(glm::vec3 p_posInWorld) { return (m_modelInverse * glm::vec4(p_posInWorld, 1.0f)).xyz(); }
 	glm::vec3 getDirInObject(glm::vec3 p_dirInWorld) { return (m_modelInverse * glm::vec4(p_dirInWorld, 0.0f)).xyz(); }
 
+	glm::vec3 getPosition() { return m_position; }
+
 protected:
 	void updateModel() { //set the model and scale
 							m_model = glm::translate(glm::mat4(1.0f), m_position) * glm::mat4(m_quaternion) * glm::scale(glm::mat4(1.0f), m_scale);

@@ -44,8 +44,8 @@ class ObjMesh : public Object
 			min = getPosInWorld(min);
 			max = getPosInWorld(max);
 			
-			int nb_w = 2;
-			int nb_h = 2;
+			int nb_w = 1;
+			int nb_h = 1;
 
 			float w_x = (max.x - min.x) / nb_w;
 			float w_y = (max.y - min.y) / nb_h;
@@ -101,7 +101,7 @@ class ObjMesh : public Object
 			
 			int closest = -1;
 			//find the closest collider
-			for (int i = 0; i < 1; i++) {
+			for (int i = 0; i < colliders.size(); i++) {
 				RaycastHit hit;
 				if (colliders[i]->raycast(p_origin, p_dir, p_interval, hit)) {
 					if (hit.t < min_t) {

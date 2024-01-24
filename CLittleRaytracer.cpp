@@ -91,6 +91,11 @@ void LittleRaytracer::run()
 
 	glm::ivec2 currentPixelCoordinates = glm::vec2(0, 0);
 
+	//init threads to render each lines of the screen
+	std::vector<std::thread> threads;
+	//get max number of threads - 1
+	int maxThreads = std::thread::hardware_concurrency() / 2 ;
+
 	m_running = true;
 	m_numFrame = 1;
 	SDL_Event event;
@@ -124,31 +129,38 @@ void LittleRaytracer::run()
 			}
 		}
 
-		if (currentPixelCoordinates.y < m_resolution.y)
-		{
-			glm::vec3 color = getPixelColor(currentPixelCoordinates);
-			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
-
-			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
-
-			currentPixelCoordinates.x++;
-			if (currentPixelCoordinates.x == m_resolution.x)
-			{
-				currentPixelCoordinates.x = 0;
+		//divide screen by line, and render each line in a thread
+		for (int i = 0; i < maxThreads; i++) {
+			threads.push_back(std::thread(&LittleRaytracer::renderLine, this, currentPixelCoordinates.y));
+			if(currentPixelCoordinates.y + 1 < m_resolution.y)
 				currentPixelCoordinates.y++;
-			
-				SDL_RenderPresent(m_renderer);
-				SDL_Delay(0);
+			else {
+				m_numFrame++;
+				currentPixelCoordinates.y = 0;
 			}
 		}
-		else
-		{
-			m_numFrame++;
-			currentPixelCoordinates.x = 0;
-			currentPixelCoordinates.y = 0;
+
+		//wait for all threads to finish
+		for (int i = 0; i < threads.size(); i++) {
+			threads[i].join();
 		}
 
-		
+		//reset threads
+		threads.clear();
+
+		//update pixels on screen
+		for (int y = 0; y < m_resolution.y; y++)
+		{
+			for (int x = 0; x < m_resolution.x; x++)
+			{
+				glm::vec3 color = m_pixelsAcc[y * m_resolution.x + x] / (float)m_numFrame;
+				updatePixelOnScreen(x, y, color);
+			}
+		}
+
+		SDL_RenderPresent(m_renderer);
+		SDL_Delay(0);
+
 	}
 }
 
@@ -191,53 +203,75 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 			rch = rchIt;
 		}
 	}
-	// GLOBAL ILLUMINATION / AMBIENT
-	if (!collided)
-		return glm::mix(glm::vec3(0.5, 0.5, 0.5)*0.1f, glm::vec3(0.7, 0.5, 0.9)*0.1f, (p_dir.y + 1.0f) / 2.0f); 
-	// EMISSIVE
-	glm::vec3 emissive(0, 0, 0);
-	if (rch.hitMaterial.emissive != glm::vec3(0, 0, 0))
-		emissive = rch.hitMaterial.emissive;			// LIGHT
-	// NORMAL REGARDING ROUGHNESS (MATERIAL)
-	glm::vec3 normal = glm::normalize(rch.hitNormal + rch.hitMaterial.roughness*glm::ballRand(1.0f)); // BE CAREFUL : normal can be (0,0,0) !
-	// DIRECT ILLUMINATION
-	glm::vec3 direct = raytrace(rch.hitPosition, normal, p_depth - 1); // ACCUMULATION
-	// INDIRECT ILLUMINATION
-	glm::vec3 reflected = raytrace(rch.hitPosition, glm::reflect(p_dir, normal), p_depth - 1);
-	// RESULT
-	return emissive + (direct + rch.hitMaterial.metallic * reflected) * rch.hitMaterial.color;
+	//calcul ambiant direct indirect light
+	glm::vec3 color = glm::vec3(0, 0, 0);
+	if (collided)
+	{
+		//direct light
+		
+		//apply ligh is using the last rchhit
+		float directLight = applyDirectLighting(m_colliders[0]->getPosition(), rch.hitPosition, rch.hitNormal, p_dir); 
+		directLight /= (float)(m_colliders.size() - 1); 
+
+		//indirect light
+		glm::vec3 indirectLight = glm::vec3(0, 0, 0);
+		glm::vec3 newDir = glm::reflect(p_dir, rch.hitNormal);
+		indirectLight = raytrace(rch.hitPosition, newDir, p_depth - 1);
+
+		//color = rch.hitMaterial.color * (directLight + indirectLight);
+		color = rch.hitMaterial.color * (directLight + indirectLight);
+	}
+	else
+	{
+		//color = glm::vec3(0.0, 0.0, 0.0);
+		color = glm::vec3(0.0, 0.0, 0.0);
+	}
+
+	return color;
+
 }
 
 
-//float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
-//{
-//	// Phong 
-//	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
-//
-//	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
-//
-//	RaycastHit rch;
-//	bool collided = false;
-//	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
-//	for (int i = 0; i < m_colliders.size(); i++)
-//	{
-//		RaycastHit rchIt;
-//		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
-//		{
-//			interval.y = rchIt.t;
-//			rch = rchIt;
-//			collided = true;
-//		}
-//	}
-//
-//	float iLight = 0;
-//	float sLight = 0;
-//
-//	if (rch.hitCollider == m_colliders[0])
-//	{
-//		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
-//		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
-//	}
-//
-//	return iLight + sLight;
-//}
+float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
+{
+	// Phong 
+	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
+
+	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
+
+	RaycastHit rch;
+	bool collided = false;
+	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
+	for (int i = 0; i < m_colliders.size(); i++)
+	{
+		RaycastHit rchIt;
+		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
+		{
+			interval.y = rchIt.t;
+			rch = rchIt;
+			collided = true;
+		}
+	}
+
+	float iLight = 0;
+	float sLight = 0;
+
+	if (rch.hitCollider == m_colliders[0])
+	{
+		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
+		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
+	}
+
+	return iLight + sLight;
+}
+
+//create function that will be used by thread to render a line of the screen
+void LittleRaytracer::renderLine(int p_line){
+	//for each pixel of the line
+	for (int x = 0; x < m_resolution.x; x++)
+	{
+		glm::vec3 color = getPixelColor(glm::ivec2(x, p_line));
+		m_pixelsAcc[p_line * m_resolution.x + x] += color; 
+
+	}
+}

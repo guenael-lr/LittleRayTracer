@@ -29,6 +29,8 @@ public:
 
 	static Mesh* loadFromOBJ(const char* p_path);
 
+	
+
 	std::vector<vertexDescriptor> m_vertices;
 	std::vector<faceDescriptor> m_faces;
 
