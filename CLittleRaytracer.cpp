@@ -1,6 +1,7 @@
 #include "Utils.h"
 #include "CLittleRaytracer.h"
 #include "Sphere.h"
+#include <thread>
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_window(NULL),
@@ -48,10 +49,10 @@ int LittleRaytracer::init()
 	SDL_RenderPresent(m_renderer);
 
 
-	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/(float)m_resolution.y, 1.0f) * 2.0f);
+	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/(float)m_resolution.y, 1.0f) * 2.0f, 0.1);
 
 
-	Object * sphere0 = new Sphere(glm::vec3(1, 1, -0.5), 1.0f);
+	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2), 1.0f);
 	sphere0->material.emissive= glm::vec3(2.0, 1.5, 1.5);
 	//sphere0->material.color = glm::vec3(1.0, 0.0, 0.0);
 	//sphere0->material.roughness = 0.1f;
@@ -62,8 +63,23 @@ int LittleRaytracer::init()
 	sphere1->material.roughness = 0.5f;
 	m_colliders.push_back(sphere1);
 
-	for (int i = 0; i < 6; i++)
-		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));
+	Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
+	sphere2->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere2->material.roughness = 0.5f;
+	m_colliders.push_back(sphere2);
+
+	Object* sphere4 = new Sphere(glm::vec3(0, 0, -1.0), 0.5f);
+	sphere4->material.color = glm::vec3(0.0, 1.0, 0.0);
+	sphere4->material.roughness = 0.5f;
+	m_colliders.push_back(sphere4);
+
+	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
+	sphere3->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere3->material.roughness = 0.5f;
+	m_colliders.push_back(sphere3);
+
+	/*for (int i = 0; i < 6; i++)
+		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));*/
 
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
@@ -118,11 +134,13 @@ void LittleRaytracer::run()
 			}
 		}
 
-		if (currentPixelCoordinates.y < m_resolution.y)
+		/*if (currentPixelCoordinates.y < m_resolution.y)
 		{
 			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
+			// multithread this
 			glm::vec3 color = getPixelColor(currentPixelCoordinates);
 			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
+			// end of multithread
 
 			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
 
@@ -141,9 +159,44 @@ void LittleRaytracer::run()
 			m_numFrame++;
 			currentPixelCoordinates.x = 0;
 			currentPixelCoordinates.y = 0;
+
+		}*/
+		const int numThreads = std::thread::hardware_concurrency(); // Get the number of available logical cores
+		numThreads > 0 ? numThreads - 1 : 1; // If the number of cores is not available, use 1 thread
+		std::vector<std::thread> threads;
+
+		for (int i = 0; i < numThreads; ++i)
+		{
+			threads.emplace_back([this, i, numThreads]() {
+				// Parallelize the loop to process different rows of pixels concurrently
+				for (int y = i; y < m_resolution.y; y += numThreads)
+				{
+					for (int x = 0; x < m_resolution.x; ++x)
+					{
+						glm::vec3 color = getPixelColor(glm::ivec2(x, y));
+						m_pixelsAcc[y * m_resolution.x + x] += color;
+					}
+				}
+				});
 		}
 
-		
+		for (auto& thread : threads)
+		{
+			thread.join(); // Wait for all threads to finish
+		}
+
+		// Normalize accumulated pixel values and update the screen
+		for (int y = 0; y < m_resolution.y; ++y)
+		{
+			for (int x = 0; x < m_resolution.x; ++x)
+			{
+				updatePixelOnScreen(x, y, m_pixelsAcc[y * m_resolution.x + x] / (float)m_numFrame);
+			}
+		}
+		m_numFrame++;
+
+		SDL_RenderPresent(m_renderer);
+		SDL_Delay(0);
 	}
 }
 
@@ -161,9 +214,17 @@ void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb)
 glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 {
 	glm::vec3 origin = m_camera->getPosInWorld(glm::vec3(0, 0, 0));
+
 	glm::vec3 dir = m_camera->getDirFromPixel(m_resolution, p_pixel);
 
-	return raytrace(origin, dir, MAX_DEPTH);
+	glm::vec3 pointAimed = origin + dir * m_camera->m_focalPlaneDistance;
+
+	// creating a jittered camera position based on the aperture radius
+	glm::vec3 newCameraPos = m_camera->getPosInWorld(glm::vec3(glm::linearRand(-1.0f, 1.0f), glm::linearRand(-1.0f, 1.0f), 0.0f) * m_camera->m_radiusPlaneAperture);
+	
+	glm::vec3 newCameraDir = glm::normalize(pointAimed - newCameraPos);
+
+	return raytrace(newCameraPos, newCameraDir, MAX_DEPTH);
 }
 
 glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth)
@@ -187,6 +248,9 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 	// GLOBAL ILLUMINATION / AMBIENT
 	if (!collided)
 		return glm::mix(glm::vec3(0.5, 0.5, 0.5)*0.1f, glm::vec3(0.7, 0.5, 0.9)*0.1f, (p_dir.y + 1.0f) / 2.0f); 
+
+
+
 	// EMISSIVE
 	glm::vec3 emissive(0, 0, 0);
 	if (rch.hitMaterial.emissive != glm::vec3(0, 0, 0))

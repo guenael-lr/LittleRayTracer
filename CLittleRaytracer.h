@@ -3,7 +3,7 @@
 #include "Camera.h"
 #include "Object.h"
 
-#define MAX_DEPTH	3
+#define MAX_DEPTH	4
 #define NB_NORMALS  1
 
 class LittleRaytracer
