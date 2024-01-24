@@ -9,7 +9,12 @@ typedef struct {
 	glm::vec2 texcoords;
 }vertexDescriptor;
 
-typedef glm::ivec3 faceDescriptor;
+typedef struct {
+	glm::vec3 v_position;
+	glm::vec3 v_normal;
+	glm::vec3 v_texcoords;
+
+}faceDescriptor;
 
 #pragma pack(pop)
 
@@ -23,13 +28,8 @@ public:
 	~Mesh();
 
 	static Mesh* loadFromOBJ(const char* p_path);
-	void draw();
-
-protected:
 
 	std::vector<vertexDescriptor> m_vertices;
 	std::vector<faceDescriptor> m_faces;
-	GLuint m_vbo_id;
-	GLuint m_ebo_id;
-	GLuint m_vao_id;
+
 };

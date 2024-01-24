@@ -1,6 +1,8 @@
 #include "Utils.h"
 #include "CLittleRaytracer.h"
 #include "Sphere.h"
+#include "ObjMesh.h"
+
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_window(NULL),
@@ -51,19 +53,23 @@ int LittleRaytracer::init()
 	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/(float)m_resolution.y, 1.0f) * 2.0f);
 
 
-	Object * sphere0 = new Sphere(glm::vec3(1, 1, -0.5), 1.0f);
-	sphere0->material.emissive= glm::vec3(2.0, 1.5, 1.5);
-	//sphere0->material.color = glm::vec3(1.0, 0.0, 0.0);
-	//sphere0->material.roughness = 0.1f;
-	m_colliders.push_back(sphere0);
+	Object * light = new Sphere(glm::vec3(1, 1, -0.5), 0.5f);
+	light->material.emissive= glm::vec3(2.0, 1.5, 1.5);
+	//light->material.color = glm::vec3(1.0, 0.0, 0.0);
+	//light->material.roughness = 0.1f;
+	m_colliders.push_back(light);
 	
 	Object* sphere1 = new Sphere(glm::vec3(0, -100.5f, -1), 100.0f);
 	sphere1->material.color = glm::vec3(1.0, 1.0, 1.0);
 	sphere1->material.roughness = 0.5f;
 	m_colliders.push_back(sphere1);
 
-	for (int i = 0; i < 6; i++)
-		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));
+	Object* fox = new ObjMesh("Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
+	//set scale to 0.1
+	//fox->setScale(glm::vec3(0.01, 0.01, 0.01));
+	fox->material.color = glm::vec3(1.0f, 0.0f, 0.0f);
+	fox->material.roughness = 0.5f;
+	m_colliders.push_back(fox);
 
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
@@ -120,7 +126,6 @@ void LittleRaytracer::run()
 
 		if (currentPixelCoordinates.y < m_resolution.y)
 		{
-			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
 			glm::vec3 color = getPixelColor(currentPixelCoordinates);
 			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
 
@@ -170,10 +175,12 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 {
 	if (p_depth == 0)
 		return glm::vec3(0, 0, 0); // IN THE SHADOW !
+
 	// nearest collider detection
 	RaycastHit rch;
 	glm::vec2 interval(0.001, INFINITY);
 	bool collided = false;
+
 	for (int i = 0; i < m_colliders.size(); i++)
 	{
 		RaycastHit rchIt;

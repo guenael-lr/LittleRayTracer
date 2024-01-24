@@ -16,5 +16,6 @@ class Collider
 {
 public:
 	virtual bool raycast(glm::vec3 p_originWorld, glm::vec3 p_dirWorld, glm::vec2 p_interval, RaycastHit& p_hit) = 0;
+	
 };
 
