@@ -11,6 +11,7 @@ struct RaycastHit {
 	glm::vec3 hitUV[3];
 	Collider* hitCollider;
 	Material* hitMaterial;
+	glm::vec3 hitVertices[3];
 
 };
 

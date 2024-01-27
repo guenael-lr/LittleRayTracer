@@ -16,8 +16,8 @@ public:
 		texture->loadFromFile(p_path);
 	}
 
-	glm::vec3  getColorFromTexture(glm::vec3 uv[3]) {
-		return texture->getColor(uv);
+	glm::vec3  getColorFromTexture(glm::vec3 &point, glm::vec3 vertex[3], glm::vec3 uv[3]) {
+		return texture->getColor(point, vertex, uv);
 	};
 };
 

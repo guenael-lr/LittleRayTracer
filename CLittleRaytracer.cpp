@@ -72,7 +72,7 @@ int LittleRaytracer::init()
 	fox->material = new Material();
 	fox->material->setTexture("Resources/Models/FOKS/diffuse.bmp");
 	fox->material->color = glm::vec3(1.0f, 0.0f, 0.0f);
-	fox->material->roughness = 0.5f;
+	fox->material->roughness = 1.f;
 	m_colliders.push_back(fox);
 
 
@@ -217,23 +217,14 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 		if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
 			return rch.hitMaterial->emissive;
 		
-		//if (rch.hitMaterial->texture != NULL)
-		//	color += rch.hitMaterial->getColorFromTexture(rch.hitUV);
-		//else
+		if (rch.hitMaterial->texture != NULL)
+			color += rch.hitMaterial->getColorFromTexture(rch.hitPosition,rch.hitVertices,rch.hitUV);
+		else
 			color += rch.hitMaterial->color;
 		
 		//apply ligh is using the last rchhit
 
-		float directLight = applyDirectLighting(m_colliders[0]->getPosition(), rch.hitPosition, rch.hitNormal, p_dir); 
-		directLight /= (float)(m_colliders.size() - 1); 
-		//indirect light
-		glm::vec3 indirectLight = glm::vec3(0, 0, 0);
-		glm::vec3 newDir = glm::reflect(p_dir, rch.hitNormal);
-
-		//get color from texture if there is one else get color
-
-		indirectLight = raytrace(rch.hitPosition, newDir, p_depth - 1);
-		color *= (directLight + indirectLight);
+		
 	}
 	else
 	{

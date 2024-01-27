@@ -97,41 +97,44 @@ class ObjMesh : public Object
 		bool raycast(glm::vec3 p_origin, glm::vec3 p_dir, glm::vec2 p_interval, RaycastHit& p_hit) {
 			
 			//raycast all faces
+			float min_t = INFINITY;
+			RaycastHit hit;
 			for (int i = 0; i < mesh->m_faces.size(); ++i) {
 				//get the 3 vertices of the face
 				glm::vec3 v1 = mesh->v_Positions[mesh->m_faces[i].v_position[0]];
 				glm::vec3 v2 = mesh->v_Positions[mesh->m_faces[i].v_position[1]];
 				glm::vec3 v3 = mesh->v_Positions[mesh->m_faces[i].v_position[2]];
-
-				//set vertices in world
 				v1 = getPosInWorld(v1);
 				v2 = getPosInWorld(v2);
 				v3 = getPosInWorld(v3);
-
-				//get normals
-				glm::vec3 n1 = mesh->v_Normals[mesh->m_faces[i].v_normal[0]];
-				glm::vec3 n2 = mesh->v_Normals[mesh->m_faces[i].v_normal[1]];
-				glm::vec3 n3 = mesh->v_Normals[mesh->m_faces[i].v_normal[2]];
 
 				//get normal from cross vector
 				//glm::vec3 N = glm::normalize(glm::cross(n2 - n1, n3 - n1));
 				glm::vec3 N = glm::normalize(glm::cross(v2 - v1, v3 - v1));
 				//check if the ray intersect the face
-				if (rayTriangleIntersect(p_origin, p_dir, v1, v2, v3, N, p_hit.t)) {
+				if (rayTriangleIntersect(p_origin, p_dir, v1, v2, v3, N, hit.t)) {
 					//set the hit informations
-					p_hit.hitPosition = p_origin + p_hit.t * glm::normalize(p_dir);
-					p_hit.hitNormal = glm::normalize(p_hit.hitPosition - m_position);
-					p_hit.hitCollider = this;
-					p_hit.hitMaterial = material;
-					p_hit.hitUV[0] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[0]];
-					p_hit.hitUV[1] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[1]];
-					p_hit.hitUV[2] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[2]];
-					return true;
+					hit.hitPosition = p_origin + hit.t * glm::normalize(p_dir);
+					hit.hitNormal = glm::normalize(hit.hitPosition - m_position);
+					hit.hitCollider = this;
+					hit.hitMaterial = material;
+					hit.hitUV[0] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[0]];
+					hit.hitUV[1] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[1]];
+					hit.hitUV[2] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[2]];
+					hit.hitVertices[0] = v1;
+					hit.hitVertices[1] = v2;
+					hit.hitVertices[2] = v3;
+					if (min_t > hit.t) {
+						p_hit = hit;
+						min_t = hit.t;
+
+					}
 					
 				}
 			}
-
-
+			if (min_t < INFINITY) {
+				return true;
+			}
 			return false;
 
 
@@ -139,23 +142,34 @@ class ObjMesh : public Object
 
 	bool rayTriangleIntersect(glm::vec3 &p_origin, glm::vec3 &p_dir,glm::vec3 &v0, glm::vec3 &v1, glm::vec3 &v2, glm::vec3 &N, float &t) 
 	{
-		//check if the ray is parallel to the face
-		float denom = glm::dot(N, p_dir);
-		if (denom > 1e-6) {
-			//get the distance between the origin and the face
-			glm::vec3 v0l0 = v0 - p_origin;
-			t = glm::dot(v0l0, N) / denom;
-			//check if the face is behind the ray
-			if (t >= 0) {
-				//get the intersection point
-				glm::vec3 P = p_origin + t * p_dir;
-				//check if the intersection point is in the triangle
-				if (glm::dot(glm::cross(v1 - v0, P - v0), N) >= 0 && glm::dot(glm::cross(v2 - v1, P - v1), N) >= 0 && glm::dot(glm::cross(v0 - v2, P - v2), N) >= 0) {
-					return true;
-				}
-			}
+		const float EPSILON = 0.0000001;
+		glm::vec3 edge1, edge2, h, s, q;
+		float a, f, u, v;
+		edge1 = v1 - v0;
+		edge2 = v2 - v0;
+		h = glm::cross(p_dir, edge2);
+		a = glm::dot(edge1,h);
+		if (a > -EPSILON && a < EPSILON)
+			return false;    // Le rayon est parallèle au triangle.
+
+		f = 1.0 / a;
+		s = p_origin - v0;
+		u = f * glm::dot(s,h);
+		if (u < 0.0 || u > 1.0)
+			return false;
+		q = glm::cross(s, edge1);
+		v = f * glm::dot(p_dir,q);
+		if (v < 0.0 || u + v > 1.0)
+			return false;
+
+		// On calcule t pour savoir ou le point d'intersection se situe sur la ligne.
+		t = f * glm::dot(edge2, q);
+		if (t > EPSILON && glm::dot(p_dir, N) < 0) // Intersection avec le rayon
+		{
+			return true;
 		}
-		return false;
+		else // On a bien une intersection de droite, mais pas de rayon.
+			return false;
 
 		
 	}
