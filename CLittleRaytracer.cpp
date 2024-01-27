@@ -134,7 +134,7 @@ void LittleRaytracer::run()
 			}
 		}
 
-		/*if (currentPixelCoordinates.y < m_resolution.y)
+		if (currentPixelCoordinates.y < m_resolution.y)
 		{
 			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
 			// multithread this
@@ -160,43 +160,7 @@ void LittleRaytracer::run()
 			currentPixelCoordinates.x = 0;
 			currentPixelCoordinates.y = 0;
 
-		}*/
-		const int numThreads = std::thread::hardware_concurrency(); // Get the number of available logical cores
-		numThreads > 0 ? numThreads - 1 : 1; // If the number of cores is not available, use 1 thread
-		std::vector<std::thread> threads;
-
-		for (int i = 0; i < numThreads; ++i)
-		{
-			threads.emplace_back([this, i, numThreads]() {
-				// Parallelize the loop to process different rows of pixels concurrently
-				for (int y = i; y < m_resolution.y; y += numThreads)
-				{
-					for (int x = 0; x < m_resolution.x; ++x)
-					{
-						glm::vec3 color = getPixelColor(glm::ivec2(x, y));
-						m_pixelsAcc[y * m_resolution.x + x] += color;
-					}
-				}
-				});
 		}
-
-		for (auto& thread : threads)
-		{
-			thread.join(); // Wait for all threads to finish
-		}
-
-		// Normalize accumulated pixel values and update the screen
-		for (int y = 0; y < m_resolution.y; ++y)
-		{
-			for (int x = 0; x < m_resolution.x; ++x)
-			{
-				updatePixelOnScreen(x, y, m_pixelsAcc[y * m_resolution.x + x] / (float)m_numFrame);
-			}
-		}
-		m_numFrame++;
-
-		SDL_RenderPresent(m_renderer);
-		SDL_Delay(0);
 	}
 }
 
