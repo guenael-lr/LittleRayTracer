@@ -54,21 +54,25 @@ int LittleRaytracer::init()
 
 
 	Object * light = new Sphere(glm::vec3(1, 1, -0.5), 0.5f);
-	light->material.emissive= glm::vec3(2.0, 1.5, 1.5);
-	//light->material.color = glm::vec3(1.0, 0.0, 0.0);
-	//light->material.roughness = 0.1f;
+	light->material = new Material();
+	light->material->emissive= glm::vec3(2.0, 1.5, 1.5);
+	//light->material->color = glm::vec3(1.0, 0.0, 0.0);
+	//light->material->roughness = 0.1f;
 	m_colliders.push_back(light);
 	
 	Object* sphere1 = new Sphere(glm::vec3(0, -100.5f, -1), 100.0f);
-	sphere1->material.color = glm::vec3(1.0, 1.0, 1.0);
-	sphere1->material.roughness = 0.5f;
+	sphere1->material = new Material();
+	sphere1->material->color = glm::vec3(1.0, 1.0, 1.0);
+	sphere1->material->roughness = 0.5f;
 	m_colliders.push_back(sphere1);
 
 	Object* fox = new ObjMesh("Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
 	//set scale to 0.1
 	//fox->setScale(glm::vec3(0.01, 0.01, 0.01));
-	fox->material.color = glm::vec3(1.0f, 0.0f, 0.0f);
-	fox->material.roughness = 0.5f;
+	fox->material = new Material();
+	fox->material->setTexture("Resources/Models/FOKS/diffuse.bmp");
+	fox->material->color = glm::vec3(1.0f, 0.0f, 0.0f);
+	fox->material->roughness = 0.5f;
 	m_colliders.push_back(fox);
 
 
@@ -204,27 +208,37 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 		}
 	}
 	//calcul ambiant direct indirect light
+
+	//color start at ambiant light
 	glm::vec3 color = glm::vec3(0, 0, 0);
 	if (collided)
 	{
-		//direct light
+		//check if material if emissive
+		if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
+			return rch.hitMaterial->emissive;
+		
+		//if (rch.hitMaterial->texture != NULL)
+		//	color += rch.hitMaterial->getColorFromTexture(rch.hitUV);
+		//else
+			color += rch.hitMaterial->color;
 		
 		//apply ligh is using the last rchhit
+
 		float directLight = applyDirectLighting(m_colliders[0]->getPosition(), rch.hitPosition, rch.hitNormal, p_dir); 
 		directLight /= (float)(m_colliders.size() - 1); 
-
 		//indirect light
 		glm::vec3 indirectLight = glm::vec3(0, 0, 0);
 		glm::vec3 newDir = glm::reflect(p_dir, rch.hitNormal);
-		indirectLight = raytrace(rch.hitPosition, newDir, p_depth - 1);
 
-		//color = rch.hitMaterial.color * (directLight + indirectLight);
-		color = rch.hitMaterial.color * (directLight + indirectLight);
+		//get color from texture if there is one else get color
+
+		indirectLight = raytrace(rch.hitPosition, newDir, p_depth - 1);
+		color *= (directLight + indirectLight);
 	}
 	else
 	{
-		//color = glm::vec3(0.0, 0.0, 0.0);
-		color = glm::vec3(0.0, 0.0, 0.0);
+		//no collider hit, return sky color
+		color = glm::vec3(0.f, 0.2f, 0.5f);
 	}
 
 	return color;
@@ -234,35 +248,43 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 
 float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
 {
-	// Phong 
-	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
+    // Phong 
+    // I = Ka + Kd.(L.N) + Ks.(E.R)^s
 
-	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
+    glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
 
-	RaycastHit rch;
-	bool collided = false;
-	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
-	for (int i = 0; i < m_colliders.size(); i++)
-	{
-		RaycastHit rchIt;
-		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
-		{
-			interval.y = rchIt.t;
-			rch = rchIt;
-			collided = true;
-		}
-	}
+    RaycastHit rch;
+    bool collided = false;
+    glm::vec2 interval = glm::vec2(0.001f, INFINITY);
 
-	float iLight = 0;
-	float sLight = 0;
+    for (int i = 0; i < m_colliders.size(); i++)
+    {
+        RaycastHit rchIt;
+        if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
+        {
+            interval.y = rchIt.t;
+            rch = rchIt;
+            collided = true;
+        }
+    }
 
-	if (rch.hitCollider == m_colliders[0])
-	{
-		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
-		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
-	}
+    float iLight = 0;
+    float sLight = 0;
+    if (collided) {
+        // Check if the collided object is the light source
+        if (rch.hitCollider == m_colliders[0])
+        {
+            // Skip the shadow calculation for the light source
+            iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
+        }
+        else
+        {
+            sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
+			sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
+        }
+    }
 
-	return iLight + sLight;
+    return iLight + sLight;
 }
 
 //create function that will be used by thread to render a line of the screen

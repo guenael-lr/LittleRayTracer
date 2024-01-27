@@ -16,7 +16,7 @@ class ObjMesh : public Object
 		Mesh* mesh;
 
 		//table of three vertices for each collider
-		std::vector<std::vector<vertexDescriptor>> vertices;
+		std::vector<std::vector<glm::vec3>> vertices;
 		
 		//vector of colliders
 		std::vector<AABB*> colliders;
@@ -29,14 +29,14 @@ class ObjMesh : public Object
 			glm::vec3 min = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 			glm::vec3 max = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
-			for (int i = 0; i < mesh->m_vertices.size(); i++) {
-				min.x = glm::min(min.x, mesh->m_vertices[i].position.x);
-				min.y = glm::min(min.y, mesh->m_vertices[i].position.y);
-				min.z = glm::min(min.z, mesh->m_vertices[i].position.z);
+			for (int i = 0; i < mesh->v_Positions.size(); i++) {
+				min.x = glm::min(min.x, mesh->v_Positions[i].x);
+				min.y = glm::min(min.y, mesh->v_Positions[i].y);
+				min.z = glm::min(min.z, mesh->v_Positions[i].z);
 
-				max.x = glm::max(max.x, mesh->m_vertices[i].position.x);
-				max.y = glm::max(max.y, mesh->m_vertices[i].position.y);
-				max.z = glm::max(max.z, mesh->m_vertices[i].position.z);
+				max.x = glm::max(max.x, mesh->v_Positions[i].x);
+				max.y = glm::max(max.y, mesh->v_Positions[i].y);
+				max.z = glm::max(max.z, mesh->v_Positions[i].z);
 			}
 
 			//set the min and max to posinworld
@@ -44,8 +44,8 @@ class ObjMesh : public Object
 			min = getPosInWorld(min);
 			max = getPosInWorld(max);
 			
-			int nb_w = 1;
-			int nb_h = 1;
+			int nb_w = 2;
+			int nb_h = 2;
 
 			float w_x = (max.x - min.x) / nb_w;
 			float w_y = (max.y - min.y) / nb_h;
@@ -61,20 +61,20 @@ class ObjMesh : public Object
 
 			//table of faces, add a face to a collider if a vertice is in the collider
 			for (int i = 0; i < colliders.size(); i++) {
-				std::vector<vertexDescriptor> vertices_collider;
+				std::vector<glm::vec3> vertices_collider;
 				for (int j = 0; j < mesh->m_faces.size(); j++) {
 					//get the 3 vertices of the face
-					vertexDescriptor v1 = mesh->m_vertices[mesh->m_faces[j].v_position.x - 1];
-					vertexDescriptor v2 = mesh->m_vertices[mesh->m_faces[j].v_position.y - 1];
-					vertexDescriptor v3 = mesh->m_vertices[mesh->m_faces[j].v_position.z - 1];
+					glm::vec3 v1 = mesh->v_Positions[mesh->m_faces[j].v_position[0]];
+					glm::vec3 v2 = mesh->v_Positions[mesh->m_faces[j].v_position[1]];
+					glm::vec3 v3 = mesh->v_Positions[mesh->m_faces[j].v_position[2]];
 
 					//set vertices in world
-					v1.position = getPosInWorld(v1.position);
-					v2.position = getPosInWorld(v2.position);
-					v3.position = getPosInWorld(v3.position);
+					v1 = getPosInWorld(v1);
+					v2 = getPosInWorld(v2);
+					v3 = getPosInWorld(v3);
 
 					//check if a vertice is in the collider
-					if (colliders[i]->isInside(v1.position) || colliders[i]->isInside(v2.position) || colliders[i]->isInside(v3.position)) {
+					if (colliders[i]->isPointInside(v1) || colliders[i]->isPointInside(v2) || colliders[i]->isPointInside(v3)) {
 						vertices_collider.push_back(v1);
 						vertices_collider.push_back(v2);
 						vertices_collider.push_back(v3);
@@ -96,70 +96,39 @@ class ObjMesh : public Object
 
 		bool raycast(glm::vec3 p_origin, glm::vec3 p_dir, glm::vec2 p_interval, RaycastHit& p_hit) {
 			
-			//raycast to the colliders
-			float min_t = FLT_MAX;
-			
-			int closest = -1;
-			//find the closest collider
-			for (int i = 0; i < colliders.size(); i++) {
-				RaycastHit hit;
-				if (colliders[i]->raycast(p_origin, p_dir, p_interval, hit)) {
-					if (hit.t < min_t) {
-						min_t = hit.t;
-						closest = i;
-					}
-				} 
-			}
-
-			//if no collider is hit, return false
-			if (closest < 0)
-				return false;
-
-			for (int i = 0; i < vertices[closest].size(); i++) {
+			//raycast all faces
+			for (int i = 0; i < mesh->m_faces.size(); ++i) {
 				//get the 3 vertices of the face
-				glm::vec3 v1 = vertices[closest][i].position;
-				glm::vec3 v2 = vertices[closest][i + 1].position;
-				glm::vec3 v3 = vertices[closest][i + 2].position;
+				glm::vec3 v1 = mesh->v_Positions[mesh->m_faces[i].v_position[0]];
+				glm::vec3 v2 = mesh->v_Positions[mesh->m_faces[i].v_position[1]];
+				glm::vec3 v3 = mesh->v_Positions[mesh->m_faces[i].v_position[2]];
 
-				//get normal of face
-				glm::vec3 normal = glm::normalize(glm::cross(v2 - v1, v3 - v1));
+				//set vertices in world
+				v1 = getPosInWorld(v1);
+				v2 = getPosInWorld(v2);
+				v3 = getPosInWorld(v3);
 
-				//check if the ray and the face are parallel
-				if (glm::dot(normal, p_dir) == 0) {
-					continue;
-				}
+				//get normals
+				glm::vec3 n1 = mesh->v_Normals[mesh->m_faces[i].v_normal[0]];
+				glm::vec3 n2 = mesh->v_Normals[mesh->m_faces[i].v_normal[1]];
+				glm::vec3 n3 = mesh->v_Normals[mesh->m_faces[i].v_normal[2]];
 
-				//get the distance between the ray origin and the face
-				float d = glm::dot(normal, v1);
-
-				//compute t
-				float t = (d - glm::dot(normal, p_origin)) / glm::dot(normal, p_dir);
-				if (t < p_interval.x || t > p_interval.y) {
-					continue;
-				}
-
-				//compute the intersection point
-				glm::vec3 intersection = p_origin + t * p_dir;
-
-				//check if the intersection point is inside the face
-
-
-				glm::vec3 edge1 = v2 - v1;
-				glm::vec3 edge2 = v3 - v2;
-
-				glm::vec3 C = glm::cross(edge1, intersection - v1);
-				glm::vec3 C2 = glm::cross(edge2, intersection - v2);
-				glm::vec3 C3 = glm::cross(v1 - v3, intersection - v3);
-
-				if (glm::dot(normal, C) >= 0 && glm::dot(normal, C2) >= 0 && glm::dot(normal, C3) >= 0) {
-					p_hit.t = t;
-					p_hit.hitPosition = intersection;
-					p_hit.hitNormal = normal;
+				//get normal from cross vector
+				//glm::vec3 N = glm::normalize(glm::cross(n2 - n1, n3 - n1));
+				glm::vec3 N = glm::normalize(glm::cross(v2 - v1, v3 - v1));
+				//check if the ray intersect the face
+				if (rayTriangleIntersect(p_origin, p_dir, v1, v2, v3, N, p_hit.t)) {
+					//set the hit informations
+					p_hit.hitPosition = p_origin + p_hit.t * glm::normalize(p_dir);
+					p_hit.hitNormal = glm::normalize(p_hit.hitPosition - m_position);
 					p_hit.hitCollider = this;
 					p_hit.hitMaterial = material;
+					p_hit.hitUV[0] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[0]];
+					p_hit.hitUV[1] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[1]];
+					p_hit.hitUV[2] = mesh->v_TexCoords[mesh->m_faces[i].v_texcoord[2]];
 					return true;
+					
 				}
-
 			}
 
 
@@ -167,4 +136,27 @@ class ObjMesh : public Object
 
 
 		};
+
+	bool rayTriangleIntersect(glm::vec3 &p_origin, glm::vec3 &p_dir,glm::vec3 &v0, glm::vec3 &v1, glm::vec3 &v2, glm::vec3 &N, float &t) 
+	{
+		//check if the ray is parallel to the face
+		float denom = glm::dot(N, p_dir);
+		if (denom > 1e-6) {
+			//get the distance between the origin and the face
+			glm::vec3 v0l0 = v0 - p_origin;
+			t = glm::dot(v0l0, N) / denom;
+			//check if the face is behind the ray
+			if (t >= 0) {
+				//get the intersection point
+				glm::vec3 P = p_origin + t * p_dir;
+				//check if the intersection point is in the triangle
+				if (glm::dot(glm::cross(v1 - v0, P - v0), N) >= 0 && glm::dot(glm::cross(v2 - v1, P - v1), N) >= 0 && glm::dot(glm::cross(v0 - v2, P - v2), N) >= 0) {
+					return true;
+				}
+			}
+		}
+		return false;
+
+		
+	}
 };

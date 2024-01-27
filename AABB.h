@@ -50,13 +50,16 @@ class AABB : public Collider
 			p_hit.hitPosition = p_originWorld + t * p_dirWorld;
 			p_hit.hitNormal = glm::vec3(0, 0, 0);
 			p_hit.hitCollider = this;
+			p_hit.hitMaterial = new Material();
+			p_hit.hitMaterial->color = //red for debug
+				glm::vec3(1, 0, 0);
 			return true;
 		}
 		
 		glm::vec3 m_min;
 		glm::vec3 m_max;
 
-		bool isInside(glm::vec3 p_point){
+		bool isPointInside(glm::vec3 p_point){
 			if (p_point.x <= m_min.x || p_point.x >= m_max.x)
 				return false;
 			if (p_point.y <= m_min.y || p_point.y >= m_max.y)
@@ -66,6 +69,7 @@ class AABB : public Collider
 			return true;
 		}
 
+		
 
 };
 

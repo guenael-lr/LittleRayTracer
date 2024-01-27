@@ -53,6 +53,9 @@ class Sphere: public Object
 			p_hit.hitNormal = glm::normalize(p_hit.hitPosition - m_position);
 			p_hit.hitCollider = this;
 			p_hit.hitMaterial = material;
+			p_hit.hitUV[0] = glm::vec3(0.0f);
+			p_hit.hitUV[1] = glm::vec3(0.0f);
+			p_hit.hitUV[2] = glm::vec3(0.0f);
 			return true;
 		}
 

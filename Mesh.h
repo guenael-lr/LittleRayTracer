@@ -3,16 +3,11 @@
 #include "Utils.h"
 
 #pragma pack(push,1)
-typedef struct {
-	glm::vec3 position;
-	glm::vec3 normal; 
-	glm::vec2 texcoords;
-}vertexDescriptor;
 
 typedef struct {
-	glm::vec3 v_position;
-	glm::vec3 v_normal;
-	glm::vec3 v_texcoords;
+	int v_position[3];
+	int v_normal[3];
+	int v_texcoord[3];
 
 }faceDescriptor;
 
@@ -29,9 +24,9 @@ public:
 
 	static Mesh* loadFromOBJ(const char* p_path);
 
-	
-
-	std::vector<vertexDescriptor> m_vertices;
+	std::vector<glm::vec3> v_Positions;
+	std::vector<glm::vec3> v_Normals;
+	std::vector<glm::vec3> v_TexCoords;
 	std::vector<faceDescriptor> m_faces;
 
 };
