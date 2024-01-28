@@ -8,7 +8,10 @@ class Texture
 
 	public:
 		std::vector<std::vector<glm::vec3>> m_pixels;
-		Texture(){}
+		Texture(){
+			m_width = 0;
+			m_height = 0;
+		}
 		~Texture(){}
 		void loadFromFile(const char* p_path) {
 			//load image from bmp so we need to inverse image in y
@@ -42,12 +45,15 @@ class Texture
 
 		glm::vec3 getColor(glm::vec3 &point, glm::vec3 vertices[3], glm::vec3 uv[3]) {
 			glm::vec3 barycentric = getBarycentric(point, vertices);
-			glm::vec3 colorVertices[3];
-			for (int i = 0; i < 3; ++i) 
-				colorVertices[i] = m_pixels[(int)(uv[i].x * m_width)][(int)((1 - uv[i].y) * m_height)];
 			
+			//use the barycentric to get UV position if the point
+			glm::vec3 uvPoint = uv[0] * barycentric.x + uv[1] * barycentric.y + uv[2] * barycentric.z;
 
-			return colorVertices[0] * barycentric.x + colorVertices[1] * barycentric.y + colorVertices[2] * barycentric.z;
+			//convert the UV position to pixel position
+			int x = (int)(uvPoint.x * m_width);
+			int y = (int)( (1 -uvPoint.y ) * m_height);
+
+			return m_pixels[x][y];
 		}
 
 		glm::vec3 getBarycentric(glm::vec3 &point, glm::vec3 vertices[3]) {

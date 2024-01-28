@@ -132,39 +132,35 @@ void LittleRaytracer::run()
 				}
 			}
 		}
-
-		//divide screen by line, and render each line in a thread
-		for (int i = 0; i < maxThreads; i++) {
-			threads.push_back(std::thread(&LittleRaytracer::renderLine, this, currentPixelCoordinates.y));
-			if(currentPixelCoordinates.y + 1 < m_resolution.y)
-				currentPixelCoordinates.y++;
-			else {
-				m_numFrame++;
-				currentPixelCoordinates.y = 0;
-			}
-		}
-
-		//wait for all threads to finish
-		for (int i = 0; i < threads.size(); i++) {
-			threads[i].join();
-		}
-
-		//reset threads
-		threads.clear();
-
-		//update pixels on screen
-		for (int y = 0; y < m_resolution.y; y++)
+		
+		if (currentPixelCoordinates.y < m_resolution.y)
 		{
-			for (int x = 0; x < m_resolution.x; x++)
+			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
+			// multithread this
+			glm::vec3 color = getPixelColor(currentPixelCoordinates);
+			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
+			// end of multithread
+
+			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
+
+			currentPixelCoordinates.x++;
+			if (currentPixelCoordinates.x == m_resolution.x)
 			{
-				glm::vec3 color = m_pixelsAcc[y * m_resolution.x + x] / (float)m_numFrame;
-				updatePixelOnScreen(x, y, color);
+				currentPixelCoordinates.x = 0;
+				currentPixelCoordinates.y++;
+
+				SDL_RenderPresent(m_renderer);
+				SDL_Delay(0);
 			}
 		}
+		else
+		{
+			m_numFrame++;
+			currentPixelCoordinates.x = 0;
+			currentPixelCoordinates.y = 0;
 
-		SDL_RenderPresent(m_renderer);
-		SDL_Delay(0);
-
+		}
+		
 	}
 }
 
@@ -209,30 +205,33 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 	}
 	//calcul ambiant direct indirect light
 
+	if (!collided)
+		return glm::mix(glm::vec3(0.5, 0.5, 0.5) * 0.1f, glm::vec3(0.7, 0.5, 0.9) * 0.1f, (p_dir.y + 1.0f) / 2.0f);
+	
 	//color start at ambiant light
 	glm::vec3 color = glm::vec3(0, 0, 0);
-	if (collided)
-	{
-		//check if material if emissive
-		if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
-			return rch.hitMaterial->emissive;
+	
+	//check if material if emissive
+	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
+		return rch.hitMaterial->emissive;
 		
-		if (rch.hitMaterial->texture != NULL)
-			color += rch.hitMaterial->getColorFromTexture(rch.hitPosition,rch.hitVertices,rch.hitUV);
-		else
-			color += rch.hitMaterial->color;
-		
-		//apply ligh is using the last rchhit
-
-		
-	}
+	if (rch.hitMaterial->texture != NULL)
+		color += rch.hitMaterial->getColorFromTexture(rch.hitPosition,rch.hitVertices,rch.hitUV);
 	else
-	{
-		//no collider hit, return sky color
-		color = glm::vec3(0.f, 0.2f, 0.5f);
-	}
-
-	return color;
+		color += rch.hitMaterial->color;
+		
+	// EMISSIVE
+	glm::vec3 emissive(0, 0, 0);
+	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
+		emissive = rch.hitMaterial->emissive;			// LIGHT
+	// NORMAL REGARDING ROUGHNESS (MATERIAL)
+	glm::vec3 normal = glm::normalize(rch.hitNormal + rch.hitMaterial->roughness * glm::ballRand(1.0f)); // BE CAREFUL : normal can be (0,0,0) !
+	// DIRECT ILLUMINATION
+	glm::vec3 direct = raytrace(rch.hitPosition, normal, p_depth - 1); // ACCUMULATION
+	// INDIRECT ILLUMINATION
+	glm::vec3 reflected = raytrace(rch.hitPosition, glm::reflect(p_dir, normal), p_depth - 1);
+	// RESULT
+	return emissive + (direct + rch.hitMaterial->metallic * reflected) * color;
 
 }
 
@@ -276,15 +275,4 @@ float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_poi
     }
 
     return iLight + sLight;
-}
-
-//create function that will be used by thread to render a line of the screen
-void LittleRaytracer::renderLine(int p_line){
-	//for each pixel of the line
-	for (int x = 0; x < m_resolution.x; x++)
-	{
-		glm::vec3 color = getPixelColor(glm::ivec2(x, p_line));
-		m_pixelsAcc[p_line * m_resolution.x + x] += color; 
-
-	}
 }
