@@ -139,6 +139,7 @@ void LittleRaytracer::run()
 			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
 			// multithread this
 			glm::vec3 color = getPixelColor(currentPixelCoordinates);
+			
 			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
 			// end of multithread
 
@@ -149,7 +150,9 @@ void LittleRaytracer::run()
 			{
 				currentPixelCoordinates.x = 0;
 				currentPixelCoordinates.y++;
-			
+
+				applyGlowEffect();
+
 				SDL_RenderPresent(m_renderer);
 				SDL_Delay(0);
 			}
@@ -214,7 +217,6 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 		return glm::mix(glm::vec3(0.5, 0.5, 0.5)*0.1f, glm::vec3(0.7, 0.5, 0.9)*0.1f, (p_dir.y + 1.0f) / 2.0f); 
 
 
-
 	// EMISSIVE
 	glm::vec3 emissive(0, 0, 0);
 	if (rch.hitMaterial.emissive != glm::vec3(0, 0, 0))
@@ -230,35 +232,180 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 }
 
 
-//float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
-//{
-//	// Phong 
-//	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
-//
-//	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
-//
-//	RaycastHit rch;
-//	bool collided = false;
-//	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
-//	for (int i = 0; i < m_colliders.size(); i++)
-//	{
-//		RaycastHit rchIt;
-//		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
-//		{
-//			interval.y = rchIt.t;
-//			rch = rchIt;
-//			collided = true;
-//		}
-//	}
-//
-//	float iLight = 0;
-//	float sLight = 0;
-//
-//	if (rch.hitCollider == m_colliders[0])
-//	{
-//		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
-//		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
-//	}
-//
-//	return iLight + sLight;
-//}
+float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
+{
+	// Phong 
+	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
+
+	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
+
+	RaycastHit rch;
+	bool collided = false;
+	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
+	for (int i = 0; i < m_colliders.size(); i++)
+	{
+		RaycastHit rchIt;
+		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
+		{
+			interval.y = rchIt.t;
+			rch = rchIt;
+			collided = true;
+		}
+	}
+
+	float iLight = 0;
+	float sLight = 0;
+
+	if (rch.hitCollider == m_colliders[0])
+	{
+		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
+		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
+	}
+
+	return iLight + sLight;
+}
+
+void LittleRaytracer::applyGlowEffect()
+{
+	// Créez un tableau temporaire pour stocker l'image après le filtre bilatéral
+	glm::vec3* tempImage = new glm::vec3[m_resolution.x * m_resolution.y];
+	memcpy(tempImage, m_pixelsAcc, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+
+	// Appliquez le filtre bilatéral en deux passes (horizontal et vertical)
+	bilateralFilter(tempImage, m_pixelsAcc, m_resolution.x, m_resolution.y, 1.0f, 0.1f);
+
+	// Libérez la mémoire du tableau temporaire
+	delete[] tempImage;
+}
+
+void LittleRaytracer::bilateralFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, float p_sigmaSpace, float p_sigmaColor)
+{
+	// Calculez le rayon du filtre en fonction de l'écart-type spatial
+	int radius = (int)ceil(p_sigmaSpace * 3.0f);
+
+	// Créez un tableau temporaire pour stocker l'image après le filtre spatial
+	glm::vec3* tempImage = new glm::vec3[p_width * p_height];
+
+	// Appliquez le filtre spatial en deux passes (horizontal et vertical)
+	spatialFilter(p_input, tempImage, p_width, p_height, radius, p_sigmaSpace);
+
+	// Appliquez le filtre de couleur
+	colorFilter(tempImage, p_output, p_width, p_height, radius, p_sigmaColor);
+
+	// Libérez la mémoire du tableau temporaire
+	delete[] tempImage;
+}
+
+void LittleRaytracer::spatialFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int p_radius, float p_sigma)
+{
+	// Calculez les poids du filtre spatial
+	float* weights = new float[2 * p_radius + 1];
+	float sum = 0.0f;
+	for (int i = -p_radius; i <= p_radius; i++)
+	{
+		weights[i + p_radius] = expf(-(float)(i * i) / (2.0f * p_sigma * p_sigma));
+		sum += weights[i + p_radius];
+	}
+
+	// Normalisez les poids
+	for (int i = 0; i < 2 * p_radius + 1; i++)
+		weights[i] /= sum;
+
+	// Appliquez le filtre spatial en deux passes (horizontal et vertical)
+	for (int pass = 0; pass < 2; pass++)
+	{
+		// Parcourez chaque ligne de l'image
+		for (int y = 0; y < p_height; y++)
+		{
+			// Parcourez chaque colonne de l'image
+			for (int x = 0; x < p_width; x++)
+			{
+				// Calculez la couleur filtrée pour le pixel (x, y)
+				glm::vec3 color = glm::vec3(0.0f);
+				for (int i = -p_radius; i <= p_radius; i++)
+				{
+					// Calculez la position du pixel voisin
+					int xNeighbor = x;
+					int yNeighbor = y;
+					if (pass == 0)
+						xNeighbor += i;
+					else
+						yNeighbor += i;
+
+					// Assurez-vous que le pixel voisin est dans l'image
+					if (xNeighbor >= 0 && xNeighbor < p_width && yNeighbor >= 0 && yNeighbor < p_height)
+					{
+						// Calculez le poids du pixel voisin
+						float weight = weights[i + p_radius];
+
+						// Ajoutez la couleur du pixel voisin à la couleur filtrée
+						color += weight * p_input[yNeighbor * p_width + xNeighbor];
+					}
+				}
+
+				// Stockez la couleur filtrée dans l'image de sortie
+				p_output[y * p_width + x] = color;
+			}
+		}
+	}
+
+	// Libérez la mémoire des poids
+	delete[] weights;
+}
+
+void LittleRaytracer::colorFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int p_radius, float p_sigma)
+{
+	// Calculez les poids du filtre de couleur
+	float* weights = new float[2 * p_radius + 1];
+	float sum = 0.0f;
+	for (int i = -p_radius; i <= p_radius; i++)
+	{
+		weights[i + p_radius] = expf(-(float)(i * i) / (2.0f * p_sigma * p_sigma));
+		sum += weights[i + p_radius];
+	}
+
+	// Normalisez les poids
+	for (int i = 0; i < 2 * p_radius + 1; i++)
+		weights[i] /= sum;
+
+	// Appliquez le filtre de couleur en deux passes (horizontal et vertical)
+	for (int pass = 0; pass < 2; pass++)
+	{
+		// Parcourez chaque ligne de l'image
+		for (int y = 0; y < p_height; y++)
+		{
+			// Parcourez chaque colonne de l'image
+			for (int x = 0; x < p_width; x++)
+			{
+				// Calculez la couleur filtrée pour le pixel (x, y)
+				glm::vec3 color = glm::vec3(0.0f);
+				for (int i = -p_radius; i <= p_radius; i++)
+				{
+					// Calculez la position du pixel voisin
+					int xNeighbor = x;
+					int yNeighbor = y;
+					if (pass == 0)
+						xNeighbor += i;
+					else
+						yNeighbor += i;
+
+					// Assurez-vous que le pixel voisin est dans l'image
+					if (xNeighbor >= 0 && xNeighbor < p_width && yNeighbor >= 0 && yNeighbor < p_height)
+					{
+						// Calculez le poids du pixel voisin
+						float weight = weights[i + p_radius];
+
+						// Ajoutez la couleur du pixel voisin à la couleur filtrée
+						color += weight * p_input[yNeighbor * p_width + xNeighbor];
+					}
+				}
+
+				// Stockez la couleur filtrée dans l'image
+p_output[y * p_width + x] = color;
+			}
+		}
+	}
+
+	// Libérez la mémoire des poids
+	delete[] weights;
+}
