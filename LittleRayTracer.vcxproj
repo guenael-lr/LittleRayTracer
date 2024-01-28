@@ -161,12 +161,14 @@
     <ClInclude Include="Entity3D.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Object.h" />
+    <ClInclude Include="PostProcessEffect.h" />
     <ClInclude Include="Sphere.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CLittleRaytracer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PostProcessEffect.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

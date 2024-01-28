@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "Camera.h"
 #include "Object.h"
+#include "PostProcessEffect.h"
 
 #define MAX_DEPTH	4
 #define NB_NORMALS  1
@@ -21,10 +22,7 @@ protected:
 	glm::vec3 raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth);
 	float applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir);
 	void applyGlowEffect();
-	void bilateralFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, float p_sigmaSpace, float p_sigmaColor);
-	void spatialFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int radius, float p_sigmaSpace);
-	void colorFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int radius, float p_sigmaColor);
-
+	
 	bool m_running;
 
 	SDL_Window* m_window;
@@ -39,6 +37,6 @@ protected:
 	glm::vec3 * m_pixelsAcc;
 	int m_numFrame;
 
-
+	std::vector<PostProcessEffect*> m_postProcessEffects;
 };
 
