@@ -26,6 +26,10 @@ LittleRaytracer::~LittleRaytracer()
 	for (int i = 0; i < m_colliders.size(); i++)
 		delete m_colliders[i];
 	
+	for(const PostProcessEffect* effect : m_postProcessEffects)
+		delete effect;
+	m_postProcessEffects.clear();
+	
 	if(m_renderer)
 		SDL_DestroyRenderer(m_renderer);
 	if(m_window)

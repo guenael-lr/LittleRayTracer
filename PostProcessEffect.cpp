@@ -1,17 +1,6 @@
 ﻿#include "PostProcessEffect.h"
+#include "CLittleRaytracer.h"
 
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
-#include "CLittleRaytracer.h"
 void GlowEffect::applyPostProcess(glm::vec3* p_scenePixels, const int p_resolutionX, const int p_resolutionY)
 {
 	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
