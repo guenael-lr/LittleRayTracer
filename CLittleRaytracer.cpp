@@ -1,7 +1,9 @@
 #include "Utils.h"
 #include "CLittleRaytracer.h"
+
+#include <algorithm>
+
 #include "Sphere.h"
-#include <thread>
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_running(false),
@@ -11,7 +13,8 @@ LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_camera(NULL),
 	m_pixelsAcc(NULL),
 	m_numFrame(1),
-	m_postProcessEffects({})
+	m_postProcessEffects({}),
+	m_threads({})
 {
 }
 
@@ -35,8 +38,6 @@ LittleRaytracer::~LittleRaytracer()
 		SDL_DestroyWindow(m_window);
 	SDL_Quit();
 }
-
-
 
 
 int LittleRaytracer::init()
@@ -90,6 +91,8 @@ int LittleRaytracer::init()
 	memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 
 	m_postProcessEffects.emplace_back(new GlowEffect(0.5f, 0.1f));
+
+	m_nbThreads = std::thread::hardware_concurrency();
 	return 0;
 }
 
@@ -109,6 +112,12 @@ void LittleRaytracer::run()
 	m_running = true;
 	m_numFrame = 1;
 	SDL_Event event;
+
+	//FOR DEBUGGING 
+			m_nbThreads = 1;
+
+	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
+	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
 	while (m_running)
 	{
 		while (SDL_PollEvent(&event))
@@ -138,27 +147,43 @@ void LittleRaytracer::run()
 				}
 			}
 		}
-
 		if (currentPixelCoordinates.y < m_resolution.y)
 		{
-			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
-			// multithread this
-			glm::vec3 color = getPixelColor(currentPixelCoordinates);
+			currentPixelCoordinates.x = 0;
 			
-			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
-			// end of multithread
-
-			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
-
-			currentPixelCoordinates.x++;
-			if (currentPixelCoordinates.x == m_resolution.x)
+			//Start of multithread
+			unsigned int startX = 0;
+			for (unsigned int i = 0; i < m_nbThreads; ++i)
 			{
-				currentPixelCoordinates.x = 0;
-				currentPixelCoordinates.y++;
+				unsigned int endX = startX + pixelsPerThread + (i < remainingPixelsPerThread ? 1 : 0);
 
-				SDL_RenderPresent(m_renderer);
-				SDL_Delay(0);
+				m_threads.emplace_back(new std::thread([this](int p_currY, int p_startX, int p_endX)
+				{
+					for (int currX = p_startX; currX < p_endX; ++currX)
+					{
+						glm::vec3 color = getPixelColor(glm::ivec2(currX, p_currY));
+						
+						std::lock_guard<std::mutex> lck(m_mutex);
+						m_pixelsAcc[p_currY * m_resolution.x + currX] += color;
+						updatePixelOnScreen(currX, p_currY, m_pixelsAcc[p_currY * m_resolution.x + currX] / static_cast<float>(m_numFrame));
+					}
+				}, currentPixelCoordinates.y, startX, endX));
+
+				startX = endX;
 			}
+
+			// Join threads
+			for (std::thread* thread : m_threads)
+			{
+				thread->join();
+				delete thread;
+			}
+
+			m_threads.clear();
+
+			SDL_RenderPresent(m_renderer);
+			SDL_Delay(0);
+			currentPixelCoordinates.y++;
 		}
 		else
 		{
@@ -166,8 +191,8 @@ void LittleRaytracer::run()
 			currentPixelCoordinates.x = 0;
 			currentPixelCoordinates.y = 0;
 			
-			for(PostProcessEffect* effect : m_postProcessEffects)
-				effect->applyPostProcess(m_pixelsAcc, m_resolution.x, m_resolution.y);
+			//for(PostProcessEffect* effect : m_postProcessEffects)
+			//	effect->applyPostProcess(m_pixelsAcc, m_resolution.x, m_resolution.y);
 		}
 	}
 }
@@ -185,6 +210,8 @@ void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb) con
 
 glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 {
+	std::unique_lock<std::mutex> lck(m_mutex);
+	
 	glm::vec3 origin = m_camera->getPosInWorld(glm::vec3(0, 0, 0));
 
 	glm::vec3 dir = m_camera->getDirFromPixel(m_resolution, p_pixel);
@@ -193,6 +220,8 @@ glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 
 	// creating a jittered camera position based on the aperture radius
 	glm::vec3 newCameraPos = m_camera->getPosInWorld(glm::vec3(glm::linearRand(-1.0f, 1.0f), glm::linearRand(-1.0f, 1.0f), 0.0f) * m_camera->m_radiusPlaneAperture);
+
+	lck.unlock();
 	
 	glm::vec3 newCameraDir = glm::normalize(pointAimed - newCameraPos);
 

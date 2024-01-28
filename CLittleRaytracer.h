@@ -1,4 +1,8 @@
 #pragma once
+
+#include <mutex>
+#include <thread>
+
 #include "Utils.h"
 #include "Camera.h"
 #include "Object.h"
@@ -37,5 +41,9 @@ protected:
 	int m_numFrame;
 
 	std::vector<PostProcessEffect*> m_postProcessEffects;
+
+	unsigned int m_nbThreads;
+	std::vector<std::thread*> m_threads;
+	std::mutex m_mutex;
 };
 
