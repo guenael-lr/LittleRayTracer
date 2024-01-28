@@ -17,11 +17,10 @@ public:
 
 protected:
 	int init();
-	void updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb);
+	void updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb) const;
 	glm::vec3 getPixelColor(glm::ivec2 p_pixel);
 	glm::vec3 raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth);
-	float applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir);
-	void applyGlowEffect();
+	float applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir) const;
 	
 	bool m_running;
 

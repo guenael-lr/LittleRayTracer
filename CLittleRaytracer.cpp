@@ -18,13 +18,12 @@ LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 
 LittleRaytracer::~LittleRaytracer()
 {
-	if (m_pixelsAcc)
-		delete[] m_pixelsAcc;
+	delete[] m_pixelsAcc;
 
 	delete m_camera;
 
-	for (int i = 0; i < m_colliders.size(); i++)
-		delete m_colliders[i];
+	for (const auto& collider : m_colliders)
+		delete collider;
 	
 	for(const PostProcessEffect* effect : m_postProcessEffects)
 		delete effect;
@@ -42,7 +41,7 @@ LittleRaytracer::~LittleRaytracer()
 
 int LittleRaytracer::init()
 {
-	std::srand((unsigned int)time(NULL));
+	std::srand(static_cast<unsigned int>(time(nullptr)));
 
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -54,7 +53,7 @@ int LittleRaytracer::init()
 	SDL_RenderPresent(m_renderer);
 
 
-	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/(float)m_resolution.y, 1.0f) * 2.0f, 0.1);
+	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.1f);
 
 
 	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2), 1.0f);
@@ -99,7 +98,7 @@ void LittleRaytracer::run()
 {
 	if (init())
 	{
-		std::cout << "Init error" << std::endl;
+		std::cout << "Init error" << '\n';
 		return;
 	}
 
@@ -174,11 +173,11 @@ void LittleRaytracer::run()
 }
 
 
-void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb)
+void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb) const
 {
 	glm::ivec4 RGBA(0, 0, 0, 255);
 	for (int i = 0; i < 3; i++)
-		RGBA[i] = glm::clamp((int)(p_rgb[i]*256), 0, 255);
+		RGBA[i] = glm::clamp(static_cast<int>(p_rgb[i] * 256), 0, 255);
 
 	SDL_SetRenderDrawColor(m_renderer, RGBA.r, RGBA.g, RGBA.b, RGBA.a);
 	SDL_RenderDrawPoint(m_renderer, p_x, p_y);
@@ -203,15 +202,15 @@ glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth)
 {
 	if (p_depth == 0)
-		return glm::vec3(0, 0, 0); // IN THE SHADOW !
+		return {0, 0, 0}; // IN THE SHADOW !
 	// nearest collider detection
 	RaycastHit rch;
 	glm::vec2 interval(0.001, INFINITY);
 	bool collided = false;
-	for (int i = 0; i < m_colliders.size(); i++)
+	for (auto& collider : m_colliders)
 	{
 		RaycastHit rchIt;
-		if (m_colliders[i]->raycast(p_origin, p_dir, interval, rchIt))
+		if (collider->raycast(p_origin, p_dir, interval, rchIt))
 		{
 			collided = true;
 			interval.y = rchIt.t;
@@ -238,7 +237,7 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 }
 
 
-float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
+float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir) const
 {
 	// Phong 
 	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
@@ -247,11 +246,11 @@ float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_poi
 
 	RaycastHit rch;
 	bool collided = false;
-	glm::vec2 interval = glm::vec2(0.001f, INFINITY);
-	for (int i = 0; i < m_colliders.size(); i++)
+	auto interval = glm::vec2(0.001f, INFINITY);
+	for (auto collider : m_colliders)
 	{
 		RaycastHit rchIt;
-		if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
+		if (collider->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
 		{
 			interval.y = rchIt.t;
 			rch = rchIt;
