@@ -57,7 +57,9 @@ Mesh* Mesh::loadFromOBJ(const char* p_path)
 			if (token.size() > 2 || tokenAndValues.size() < 3)
 				continue;
 
-			glm::vec3 v3 = glm::vec3(std::stof(tokenAndValues[1]), std::stof(tokenAndValues[2]), std::stof(tokenAndValues[3]));
+			glm::vec3 v3 = glm::vec3(std::stof(tokenAndValues[1]), std::stof(tokenAndValues[2]), 0.0f);
+				if (tokenAndValues.size() > 3)
+					v3.z = std::stof(tokenAndValues[3]);
 
 			if (token.size() > 1)
 			{

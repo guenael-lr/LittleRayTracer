@@ -3,6 +3,11 @@
 #include "Sphere.h"
 #include "ObjMesh.h"
 
+typedef struct {
+	int p_line;
+	LittleRaytracer* raytracer;
+} ThreadData;
+
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_window(NULL),
@@ -93,13 +98,13 @@ void LittleRaytracer::run()
 
 	//init camera 
 
+
 	glm::ivec2 currentPixelCoordinates = glm::vec2(0, 0);
-
-	//init threads to render each lines of the screen
-	std::vector<std::thread> threads;
-	//get max number of threads - 1
-	int maxThreads = std::thread::hardware_concurrency() / 2 ;
-
+	SDL_Thread* thread[4];
+	int m_nbThreads = 10;
+	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
+	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
+	
 	m_running = true;
 	m_numFrame = 1;
 	SDL_Event event;
@@ -132,35 +137,45 @@ void LittleRaytracer::run()
 				}
 			}
 		}
-		
 		if (currentPixelCoordinates.y < m_resolution.y)
 		{
-			//glm::vec3 color = glm::ivec3(glm::linearRand(0, 1), glm::linearRand(0, 1), glm::linearRand(0, 1));
-			// multithread this
-			glm::vec3 color = getPixelColor(currentPixelCoordinates);
-			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
-			// end of multithread
-
-			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
-
-			currentPixelCoordinates.x++;
-			if (currentPixelCoordinates.x == m_resolution.x)
-			{
-				currentPixelCoordinates.x = 0;
-				currentPixelCoordinates.y++;
-
-				SDL_RenderPresent(m_renderer);
-				SDL_Delay(0);
-			}
-		}
-		else
-		{
-			m_numFrame++;
 			currentPixelCoordinates.x = 0;
-			currentPixelCoordinates.y = 0;
+
+			//Start of multithread
+			unsigned int startX = 0;
+			for (unsigned int i = 0; i < m_nbThreads; ++i)
+			{
+				unsigned int endX = startX + pixelsPerThread + (i < remainingPixelsPerThread ? 1 : 0);
+
+				m_threads.emplace_back(new std::thread([this](int p_currY, int p_startX, int p_endX)
+					{
+						for (int currX = p_startX; currX < p_endX; ++currX)
+						{
+							glm::vec3 color = getPixelColor(glm::ivec2(currX, p_currY));
+
+							std::lock_guard<std::mutex> lck(m_mutex);
+							m_pixelsAcc[p_currY * m_resolution.x + currX] += color;
+							updatePixelOnScreen(currX, p_currY, m_pixelsAcc[p_currY * m_resolution.x + currX] / static_cast<float>(m_numFrame));
+						}
+					}, currentPixelCoordinates.y, startX, endX));
+
+				startX = endX;
+			}
+
+			// Join threads
+			for (std::thread* thread : m_threads)
+			{
+				thread->join();
+				delete thread;
+			}
+
+			m_threads.clear();
+
+			SDL_RenderPresent(m_renderer);
+			SDL_Delay(0);
+			currentPixelCoordinates.y++;
 
 		}
-		
 	}
 }
 
@@ -220,6 +235,7 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 	else
 		color += rch.hitMaterial->color;
 		
+	return color;
 	// EMISSIVE
 	glm::vec3 emissive(0, 0, 0);
 	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
@@ -275,4 +291,17 @@ float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_poi
     }
 
     return iLight + sLight;
+}
+
+int LittleRaytracer::RENDERLINE(void* data) {
+	ThreadData* threadData = (ThreadData*)data;
+	LittleRaytracer* raytracer = threadData->raytracer;
+	int line = threadData->p_line;
+	
+	for (int x = 0; x < raytracer->m_resolution.x; x++)
+	{
+		glm::vec3 color = raytracer->getPixelColor(glm::ivec2(x, line));
+		raytracer->updatePixelOnScreen(x, line, color);
+	}
+	return 0;
 }
