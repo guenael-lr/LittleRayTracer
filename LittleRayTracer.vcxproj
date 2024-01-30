@@ -165,6 +165,7 @@
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="ObjMesh.h" />
+    <ClInclude Include="PostProcessEffect.h" />
     <ClInclude Include="Sphere.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
@@ -174,6 +175,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="ObjMesh.cpp" />
+    <ClCompile Include="PostProcessEffect.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
