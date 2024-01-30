@@ -1,5 +1,8 @@
 #include "Utils.h"
 #include "CLittleRaytracer.h"
+
+#include <algorithm>
+
 #include "Sphere.h"
 #include "ObjMesh.h"
 
@@ -10,26 +13,31 @@ typedef struct {
 
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
+	m_running(false),
 	m_window(NULL),
 	m_renderer(NULL),
 	m_resolution(p_outputRes),
-	m_running(false),
 	m_camera(NULL),
 	m_pixelsAcc(NULL),
-	m_numFrame(1)
+	m_numFrame(1),
+	m_postProcessEffects({}),
+	m_threads({})
 {
 }
 
 
 LittleRaytracer::~LittleRaytracer()
 {
-	if (m_pixelsAcc)
-		delete[] m_pixelsAcc;
+	delete[] m_pixelsAcc;
 
 	delete m_camera;
 
-	for (int i = 0; i < m_colliders.size(); i++)
-		delete m_colliders[i];
+	for (const auto& collider : m_colliders)
+		delete collider;
+	
+	for(const PostProcessEffect* effect : m_postProcessEffects)
+		delete effect;
+	m_postProcessEffects.clear();
 	
 	if(m_renderer)
 		SDL_DestroyRenderer(m_renderer);
@@ -39,11 +47,9 @@ LittleRaytracer::~LittleRaytracer()
 }
 
 
-
-
 int LittleRaytracer::init()
 {
-	std::srand((unsigned int)time(NULL));
+	std::srand(static_cast<unsigned int>(time(nullptr)));
 
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -55,10 +61,10 @@ int LittleRaytracer::init()
 	SDL_RenderPresent(m_renderer);
 
 
-	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/(float)m_resolution.y, 1.0f) * 2.0f);
+	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.1f);
 
 
-	Object * light = new Sphere(glm::vec3(1, 1, -0.5), 0.5f);
+	Object* light = new Sphere(glm::vec3(1, 1, -0.5), 0.5f);
 	light->material = new Material();
 	light->material->emissive= glm::vec3(2.0, 1.5, 1.5);
 	//light->material->color = glm::vec3(1.0, 0.0, 0.0);
@@ -71,6 +77,7 @@ int LittleRaytracer::init()
 	sphere1->material->roughness = 0.5f;
 	m_colliders.push_back(sphere1);
 
+
 	Object* fox = new ObjMesh("Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
 	//set scale to 0.1
 	//fox->setScale(glm::vec3(0.01, 0.01, 0.01));
@@ -80,10 +87,32 @@ int LittleRaytracer::init()
 	fox->material->roughness = 1.f;
 	m_colliders.push_back(fox);
 
+	/*Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
+	sphere2->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere2->material.roughness = 0.5f;
+	m_colliders.push_back(sphere2);
+
+	Object* sphere4 = new Sphere(glm::vec3(0, 0, -1.0), 0.5f);
+	sphere4->material.color = glm::vec3(0.0, 1.0, 0.0);
+	sphere4->material.roughness = 0.5f;
+	m_colliders.push_back(sphere4);
+
+	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
+	sphere3->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere3->material.roughness = 0.5f;
+	m_colliders.push_back(sphere3);*/
+
+	/*for (int i = 0; i < 6; i++)
+		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));*/
+
+
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
 	memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 
+	m_postProcessEffects.emplace_back(new GlowEffect(0.5f, 0.1f));
+
+	m_nbThreads = std::thread::hardware_concurrency();
 	return 0;
 }
 
@@ -92,7 +121,7 @@ void LittleRaytracer::run()
 {
 	if (init())
 	{
-		std::cout << "Init error" << std::endl;
+		std::cout << "Init error" << '\n';
 		return;
 	}
 
@@ -108,6 +137,12 @@ void LittleRaytracer::run()
 	m_running = true;
 	m_numFrame = 1;
 	SDL_Event event;
+
+	//FOR DEBUGGING 
+			m_nbThreads = 1;
+
+	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
+	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
 	while (m_running)
 	{
 		while (SDL_PollEvent(&event))
@@ -140,7 +175,6 @@ void LittleRaytracer::run()
 		if (currentPixelCoordinates.y < m_resolution.y)
 		{
 			currentPixelCoordinates.x = 0;
-
 			//Start of multithread
 			unsigned int startX = 0;
 			for (unsigned int i = 0; i < m_nbThreads; ++i)
@@ -148,16 +182,16 @@ void LittleRaytracer::run()
 				unsigned int endX = startX + pixelsPerThread + (i < remainingPixelsPerThread ? 1 : 0);
 
 				m_threads.emplace_back(new std::thread([this](int p_currY, int p_startX, int p_endX)
+				{
+					for (int currX = p_startX; currX < p_endX; ++currX)
 					{
-						for (int currX = p_startX; currX < p_endX; ++currX)
-						{
-							glm::vec3 color = getPixelColor(glm::ivec2(currX, p_currY));
-
-							std::lock_guard<std::mutex> lck(m_mutex);
-							m_pixelsAcc[p_currY * m_resolution.x + currX] += color;
-							updatePixelOnScreen(currX, p_currY, m_pixelsAcc[p_currY * m_resolution.x + currX] / static_cast<float>(m_numFrame));
-						}
-					}, currentPixelCoordinates.y, startX, endX));
+						glm::vec3 color = getPixelColor(glm::ivec2(currX, p_currY));
+						
+						std::lock_guard<std::mutex> lck(m_mutex);
+						m_pixelsAcc[p_currY * m_resolution.x + currX] += color;
+						updatePixelOnScreen(currX, p_currY, m_pixelsAcc[p_currY * m_resolution.x + currX] / static_cast<float>(m_numFrame));
+					}
+				}, currentPixelCoordinates.y, startX, endX));
 
 				startX = endX;
 			}
@@ -174,17 +208,25 @@ void LittleRaytracer::run()
 			SDL_RenderPresent(m_renderer);
 			SDL_Delay(0);
 			currentPixelCoordinates.y++;
-
+		}
+		else
+		{
+			m_numFrame++;
+			currentPixelCoordinates.x = 0;
+			currentPixelCoordinates.y = 0;
+			
+			//for(PostProcessEffect* effect : m_postProcessEffects)
+			//	effect->applyPostProcess(m_pixelsAcc, m_resolution.x, m_resolution.y);
 		}
 	}
 }
 
 
-void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb)
+void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb) const
 {
 	glm::ivec4 RGBA(0, 0, 0, 255);
 	for (int i = 0; i < 3; i++)
-		RGBA[i] = glm::clamp((int)(p_rgb[i]*256), 0, 255);
+		RGBA[i] = glm::clamp(static_cast<int>(p_rgb[i] * 256), 0, 255);
 
 	SDL_SetRenderDrawColor(m_renderer, RGBA.r, RGBA.g, RGBA.b, RGBA.a);
 	SDL_RenderDrawPoint(m_renderer, p_x, p_y);
@@ -192,26 +234,36 @@ void LittleRaytracer::updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb)
 
 glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 {
+	std::unique_lock<std::mutex> lck(m_mutex);
+	
 	glm::vec3 origin = m_camera->getPosInWorld(glm::vec3(0, 0, 0));
+
 	glm::vec3 dir = m_camera->getDirFromPixel(m_resolution, p_pixel);
 
-	return raytrace(origin, dir, MAX_DEPTH);
+	glm::vec3 pointAimed = origin + dir * m_camera->m_focalPlaneDistance;
+
+	// creating a jittered camera position based on the aperture radius
+	glm::vec3 newCameraPos = m_camera->getPosInWorld(glm::vec3(glm::linearRand(-1.0f, 1.0f), glm::linearRand(-1.0f, 1.0f), 0.0f) * m_camera->m_radiusPlaneAperture);
+
+	lck.unlock();
+	
+	glm::vec3 newCameraDir = glm::normalize(pointAimed - newCameraPos);
+
+	return raytrace(newCameraPos, newCameraDir, MAX_DEPTH);
 }
 
 glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth)
 {
 	if (p_depth == 0)
-		return glm::vec3(0, 0, 0); // IN THE SHADOW !
-
+		return {0.f, 0.f, 0.f}; // IN THE SHADOW !
 	// nearest collider detection
 	RaycastHit rch;
 	glm::vec2 interval(0.001, INFINITY);
 	bool collided = false;
-
-	for (int i = 0; i < m_colliders.size(); i++)
+	for (auto& collider : m_colliders)
 	{
 		RaycastHit rchIt;
-		if (m_colliders[i]->raycast(p_origin, p_dir, interval, rchIt))
+		if (collider->raycast(p_origin, p_dir, interval, rchIt))
 		{
 			collided = true;
 			interval.y = rchIt.t;
@@ -251,57 +303,35 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 
 }
 
-
-float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir)
+float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir) const
 {
-    // Phong 
-    // I = Ka + Kd.(L.N) + Ks.(E.R)^s
+	// Phong 
+	// I = Ka + Kd.(L.N) + Ks.(E.R)^s
 
-    glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
+	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
 
-    RaycastHit rch;
-    bool collided = false;
-    glm::vec2 interval = glm::vec2(0.001f, INFINITY);
-
-    for (int i = 0; i < m_colliders.size(); i++)
-    {
-        RaycastHit rchIt;
-        if (m_colliders[i]->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
-        {
-            interval.y = rchIt.t;
-            rch = rchIt;
-            collided = true;
-        }
-    }
-
-    float iLight = 0;
-    float sLight = 0;
-    if (collided) {
-        // Check if the collided object is the light source
-        if (rch.hitCollider == m_colliders[0])
-        {
-            // Skip the shadow calculation for the light source
-            iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
-        }
-        else
-        {
-            sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
-			sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
-        }
-    }
-
-    return iLight + sLight;
-}
-
-int LittleRaytracer::RENDERLINE(void* data) {
-	ThreadData* threadData = (ThreadData*)data;
-	LittleRaytracer* raytracer = threadData->raytracer;
-	int line = threadData->p_line;
-	
-	for (int x = 0; x < raytracer->m_resolution.x; x++)
+	RaycastHit rch;
+	bool collided = false;
+	auto interval = glm::vec2(0.001f, INFINITY);
+	for (auto collider : m_colliders)
 	{
-		glm::vec3 color = raytracer->getPixelColor(glm::ivec2(x, line));
-		raytracer->updatePixelOnScreen(x, line, color);
+		RaycastHit rchIt;
+		if (collider->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
+		{
+			interval.y = rchIt.t;
+			rch = rchIt;
+			collided = true;
+		}
 	}
-	return 0;
+
+	float iLight = 0;
+	float sLight = 0;
+
+	if (rch.hitCollider == m_colliders[0])
+	{
+		iLight = glm::max(0.0f, glm::dot(lightDir, p_normal));
+		sLight = glm::pow(glm::max(0.0f, glm::dot(glm::reflect(-lightDir, p_normal), p_eyeDir)), 100.0f);
+	}
+
+	return iLight + sLight;
 }
