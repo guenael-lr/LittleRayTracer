@@ -118,7 +118,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2.lib;./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2.lib;./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2main.lib;./ThirdPartyLibs/glew-2.1.0/lib/Release/x64/glew32.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>
@@ -145,29 +145,38 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2.lib;./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2.lib;./ThirdPartyLibs/SDL2-2.0.18/lib/x64/SDL2main.lib;./ThirdPartyLibs/glew-2.1.0/lib/Release/x64/glew32.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y $(SolutionDir)ThirdPartyLibs\SDL2-2.0.18\lib\x64\SDL2.dll $(SolutionDir)bin\</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
     <CustomBuildStep>
       <Command>xcopy ($solution</Command>
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="AABB.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CLittleRaytracer.h" />
     <ClInclude Include="Collider.h" />
     <ClInclude Include="Entity3D.h" />
     <ClInclude Include="Material.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="Object.h" />
+    <ClInclude Include="ObjMesh.h" />
     <ClInclude Include="PostProcessEffect.h" />
     <ClInclude Include="Sphere.h" />
+    <ClInclude Include="Texture.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AABB.cpp" />
     <ClCompile Include="CLittleRaytracer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="ObjMesh.cpp" />
+    <ClCompile Include="Texture.cpp" />
     <ClCompile Include="PostProcessEffect.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

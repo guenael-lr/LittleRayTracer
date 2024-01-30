@@ -4,6 +4,13 @@
 #include <algorithm>
 
 #include "Sphere.h"
+#include "ObjMesh.h"
+
+typedef struct {
+	int p_line;
+	LittleRaytracer* raytracer;
+} ThreadData;
+
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_running(false),
@@ -57,18 +64,30 @@ int LittleRaytracer::init()
 	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.1f);
 
 
-	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2), 1.0f);
-	sphere0->material.emissive= glm::vec3(2.0, 1.5, 1.5);
-	//sphere0->material.color = glm::vec3(1.0, 0.0, 0.0);
-	//sphere0->material.roughness = 0.1f;
-	m_colliders.push_back(sphere0);
+	Object* light = new Sphere(glm::vec3(1, 1, -0.5), 0.5f);
+	light->material = new Material();
+	light->material->emissive= glm::vec3(2.0, 1.5, 1.5);
+	//light->material->color = glm::vec3(1.0, 0.0, 0.0);
+	//light->material->roughness = 0.1f;
+	m_colliders.push_back(light);
 	
 	Object* sphere1 = new Sphere(glm::vec3(0, -100.5f, -1), 100.0f);
-	sphere1->material.color = glm::vec3(1.0, 1.0, 1.0);
-	sphere1->material.roughness = 0.5f;
+	sphere1->material = new Material();
+	sphere1->material->color = glm::vec3(1.0, 1.0, 1.0);
+	sphere1->material->roughness = 0.5f;
 	m_colliders.push_back(sphere1);
 
-	Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
+
+	Object* fox = new ObjMesh("Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
+	//set scale to 0.1
+	//fox->setScale(glm::vec3(0.01, 0.01, 0.01));
+	fox->material = new Material();
+	fox->material->setTexture("Resources/Models/FOKS/diffuse.bmp");
+	fox->material->color = glm::vec3(1.0f, 0.0f, 0.0f);
+	fox->material->roughness = 1.f;
+	m_colliders.push_back(fox);
+
+	/*Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
 	sphere2->material.color = glm::vec3(0.0, 0.0, 1.0);
 	sphere2->material.roughness = 0.5f;
 	m_colliders.push_back(sphere2);
@@ -81,10 +100,11 @@ int LittleRaytracer::init()
 	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
 	sphere3->material.color = glm::vec3(0.0, 0.0, 1.0);
 	sphere3->material.roughness = 0.5f;
-	m_colliders.push_back(sphere3);
+	m_colliders.push_back(sphere3);*/
 
 	/*for (int i = 0; i < 6; i++)
 		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));*/
+
 
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
@@ -107,8 +127,13 @@ void LittleRaytracer::run()
 
 	//init camera 
 
-	glm::ivec2 currentPixelCoordinates = glm::vec2(0, 0);
 
+	glm::ivec2 currentPixelCoordinates = glm::vec2(0, 0);
+	SDL_Thread* thread[4];
+	int m_nbThreads = 10;
+	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
+	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
+	
 	m_running = true;
 	m_numFrame = 1;
 	SDL_Event event;
@@ -150,7 +175,6 @@ void LittleRaytracer::run()
 		if (currentPixelCoordinates.y < m_resolution.y)
 		{
 			currentPixelCoordinates.x = 0;
-			
 			//Start of multithread
 			unsigned int startX = 0;
 			for (unsigned int i = 0; i < m_nbThreads; ++i)
@@ -231,7 +255,7 @@ glm::vec3 LittleRaytracer::getPixelColor(glm::ivec2 p_pixel)
 glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth)
 {
 	if (p_depth == 0)
-		return {0, 0, 0}; // IN THE SHADOW !
+		return {0.f, 0.f, 0.f}; // IN THE SHADOW !
 	// nearest collider detection
 	RaycastHit rch;
 	glm::vec2 interval(0.001, INFINITY);
@@ -246,25 +270,38 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 			rch = rchIt;
 		}
 	}
-	// GLOBAL ILLUMINATION / AMBIENT
+	//calcul ambiant direct indirect light
+
 	if (!collided)
-		return glm::mix(glm::vec3(0.5, 0.5, 0.5)*0.1f, glm::vec3(0.7, 0.5, 0.9)*0.1f, (p_dir.y + 1.0f) / 2.0f); 
-
-
+		return glm::mix(glm::vec3(0.5, 0.5, 0.5) * 0.1f, glm::vec3(0.7, 0.5, 0.9) * 0.1f, (p_dir.y + 1.0f) / 2.0f);
+	
+	//color start at ambiant light
+	glm::vec3 color = glm::vec3(0, 0, 0);
+	
+	//check if material if emissive
+	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
+		return rch.hitMaterial->emissive;
+		
+	if (rch.hitMaterial->texture != NULL)
+		color += rch.hitMaterial->getColorFromTexture(rch.hitPosition,rch.hitVertices,rch.hitUV);
+	else
+		color += rch.hitMaterial->color;
+		
+	return color;
 	// EMISSIVE
 	glm::vec3 emissive(0, 0, 0);
-	if (rch.hitMaterial.emissive != glm::vec3(0, 0, 0))
-		emissive = rch.hitMaterial.emissive;			// LIGHT
+	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
+		emissive = rch.hitMaterial->emissive;			// LIGHT
 	// NORMAL REGARDING ROUGHNESS (MATERIAL)
-	glm::vec3 normal = glm::normalize(rch.hitNormal + rch.hitMaterial.roughness*glm::ballRand(1.0f)); // BE CAREFUL : normal can be (0,0,0) !
+	glm::vec3 normal = glm::normalize(rch.hitNormal + rch.hitMaterial->roughness * glm::ballRand(1.0f)); // BE CAREFUL : normal can be (0,0,0) !
 	// DIRECT ILLUMINATION
 	glm::vec3 direct = raytrace(rch.hitPosition, normal, p_depth - 1); // ACCUMULATION
 	// INDIRECT ILLUMINATION
 	glm::vec3 reflected = raytrace(rch.hitPosition, glm::reflect(p_dir, normal), p_depth - 1);
 	// RESULT
-	return emissive + (direct + rch.hitMaterial.metallic * reflected) * rch.hitMaterial.color;
-}
+	return emissive + (direct + rch.hitMaterial->metallic * reflected) * color;
 
+}
 
 float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir) const
 {
