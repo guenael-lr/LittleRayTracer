@@ -24,6 +24,8 @@ protected:
 	
 	bool m_running;
 
+	bool m_withEffect;
+
 	SDL_Window* m_window;
 	SDL_Renderer* m_renderer;
 
@@ -34,6 +36,7 @@ protected:
 	std::vector<Object*> m_colliders;
 
 	glm::vec3 * m_pixelsAcc;
+	glm::vec3 * m_postProcessedPixels;
 	int m_numFrame;
 
 	std::vector<PostProcessEffect*> m_postProcessEffects;

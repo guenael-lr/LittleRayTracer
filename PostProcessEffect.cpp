@@ -1,14 +1,14 @@
 ﻿#include "PostProcessEffect.h"
 #include "CLittleRaytracer.h"
 
-void GlowEffect::applyPostProcess(glm::vec3* p_scenePixels, const int p_resolutionX, const int p_resolutionY)
+void GlowEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
 {
 	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
 	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
 	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
 
 	// Applique le filtre bilat�ral en deux passes (horizontal et vertical)
-	bilateralFilter(tempImage, p_scenePixels, p_resolutionX, p_resolutionY);
+	bilateralFilter(tempImage, p_postProcessedScenePixels, p_resolutionX, p_resolutionY);
 
 	// Libere la memoire du tableau temporaire
 	delete[] tempImage;
@@ -144,4 +144,47 @@ void GlowEffect::colorFilter(glm::vec3* p_input, glm::vec3* p_output, int p_widt
 
 	// Libere la memoire des poids
 	delete[] weights;
+}
+
+void GammaCorrectionEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
+{
+	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
+	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
+	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
+
+	// apply gamma correction on accumulated pixels with r g b
+	for (int i = 0; i < p_resolutionX * p_resolutionY; i++)
+	{
+		tempImage[i].r = powf(tempImage[i].r / p_numFrame, 1.0f / m_gamma);
+		tempImage[i].g = powf(tempImage[i].g / p_numFrame, 1.0f / m_gamma);
+		tempImage[i].b = powf(tempImage[i].b / p_numFrame, 1.0f / m_gamma);
+	}
+
+	// Libere la memoire du tableau temporaire
+	delete[] tempImage;
+}
+
+void ToneMappingEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
+{
+	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
+	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
+	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
+
+	// Calculate average luminance
+	float averageLuminance = 0.0f;
+	for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
+	{
+		float luminance = 0.2126f * tempImage[i].r + 0.7152f * tempImage[i].g + 0.0722f * tempImage[i].b;
+		averageLuminance += logf(0.00001f + luminance);
+	}
+	averageLuminance = expf(averageLuminance / (p_resolutionX * p_resolutionY));
+
+	// Apply Reinhard tone mapping
+	for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
+	{
+		p_postProcessedScenePixels[i] = tempImage[i] * (m_key / (1.0f + averageLuminance));
+	}
+
+	// Libere la memoire du tableau temporaire
+	delete[] tempImage;
 }

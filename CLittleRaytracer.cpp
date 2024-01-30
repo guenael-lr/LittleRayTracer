@@ -5,11 +5,13 @@
 
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_running(false),
+	m_withEffect(false),
 	m_window(NULL),
 	m_renderer(NULL),
 	m_resolution(p_outputRes),
 	m_camera(NULL),
 	m_pixelsAcc(NULL),
+	m_postProcessedPixels(NULL),
 	m_numFrame(1),
 	m_postProcessEffects({})
 {
@@ -19,6 +21,8 @@ LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 LittleRaytracer::~LittleRaytracer()
 {
 	delete[] m_pixelsAcc;
+
+	delete[] m_postProcessedPixels;
 
 	delete m_camera;
 
@@ -53,7 +57,7 @@ int LittleRaytracer::init()
 	SDL_RenderPresent(m_renderer);
 
 
-	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.1f);
+	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.0f);
 
 
 	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2), 1.0f);
@@ -87,9 +91,14 @@ int LittleRaytracer::init()
 
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
+	m_postProcessedPixels = new glm::vec3[m_resolution.x * m_resolution.y];
 	memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
-
-	m_postProcessEffects.emplace_back(new GlowEffect(0.5f, 0.1f));
+	memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+	m_postProcessEffects.emplace_back(new GammaCorrectionEffect());
+	m_postProcessEffects.emplace_back(new ToneMappingEffect(0.7f));
+	m_postProcessEffects.emplace_back(new GlowEffect(1.7f, 0.3f));
+	
+	
 	return 0;
 }
 
@@ -108,6 +117,7 @@ void LittleRaytracer::run()
 
 	m_running = true;
 	m_numFrame = 1;
+	m_withEffect = false;
 	SDL_Event event;
 	while (m_running)
 	{
@@ -126,15 +136,57 @@ void LittleRaytracer::run()
 						m_running = false;
 						break;
 					case SDLK_SPACE:
-						{
-							SDL_Surface* sshot = SDL_CreateRGBSurface(0, m_resolution.x, m_resolution.y, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
-							SDL_RenderReadPixels(m_renderer, NULL, SDL_PIXELFORMAT_ARGB8888, sshot->pixels, sshot->pitch);
-							SDL_SaveBMP(sshot, "screenshot.bmp");
-							SDL_FreeSurface(sshot);
-						}
-						break;
+					{
+						SDL_Surface* sshot = SDL_CreateRGBSurface(0, m_resolution.x, m_resolution.y, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+						SDL_RenderReadPixels(m_renderer, NULL, SDL_PIXELFORMAT_ARGB8888, sshot->pixels, sshot->pitch);
+						SDL_SaveBMP(sshot, "screenshot.bmp");
+						SDL_FreeSurface(sshot);
 					}
 					break;
+					case SDLK_f:
+						m_withEffect = !m_withEffect;
+						break;
+					case SDLK_p:
+						// add 1.0f to the focal plane distance
+						m_camera->m_focalPlaneDistance += 0.1f;
+						// reset the pixel accumulator
+						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						// reset the number of frame
+						m_numFrame = 1;
+						currentPixelCoordinates.x = 0;
+						currentPixelCoordinates.y = 0;
+						break;
+					case SDLK_m:
+						// remove 1.0f to the focal plane distance
+						m_camera->m_focalPlaneDistance -= 0.1f;
+						// reset the pixel accumulator
+						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						// reset the number of frame
+						m_numFrame = 1;
+						currentPixelCoordinates.x = 0;
+						currentPixelCoordinates.y = 0;
+						break;
+					case SDLK_l:
+						// remove 1.0f to the focal plane distance
+						m_camera->m_radiusPlaneAperture -= 0.1f;
+						// reset the pixel accumulator
+						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						// reset the number of frame
+						m_numFrame = 1;
+						currentPixelCoordinates.x = 0;
+						currentPixelCoordinates.y = 0;
+						break;
+					case SDLK_o:
+						// add 1.0f to the focal plane distance
+						m_camera->m_radiusPlaneAperture += 0.1f;
+						// reset the pixel accumulator
+						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						// reset the number of frame
+						m_numFrame = 1;
+						currentPixelCoordinates.x = 0;
+						currentPixelCoordinates.y = 0;
+						break;
+					}
 				}
 			}
 		}
@@ -148,8 +200,11 @@ void LittleRaytracer::run()
 			m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] += color;
 			// end of multithread
 
-			updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
-
+			if (m_withEffect)
+				updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_postProcessedPixels[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
+			else
+				updatePixelOnScreen(currentPixelCoordinates.x, currentPixelCoordinates.y, m_pixelsAcc[currentPixelCoordinates.y * m_resolution.x + currentPixelCoordinates.x] / (float)m_numFrame);
+			
 			currentPixelCoordinates.x++;
 			if (currentPixelCoordinates.x == m_resolution.x)
 			{
@@ -167,7 +222,7 @@ void LittleRaytracer::run()
 			currentPixelCoordinates.y = 0;
 			
 			for(PostProcessEffect* effect : m_postProcessEffects)
-				effect->applyPostProcess(m_pixelsAcc, m_resolution.x, m_resolution.y);
+				effect->applyPostProcess(m_pixelsAcc, m_postProcessedPixels, m_resolution.x, m_resolution.y, m_numFrame);
 		}
 	}
 }
