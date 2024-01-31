@@ -14,7 +14,7 @@ LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_postProcessedPixels(NULL),
 	m_numFrame(1),
 	m_postProcessEffects({}),
-	m_nbThreads(std::thread::hardware_concurrency()),
+	m_nbThreads(std::thread::hardware_concurrency() * 3 / 4),
 	m_threads({})
 {
 }
@@ -92,10 +92,10 @@ int LittleRaytracer::init()
 		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));*/
 
 
-	Object* fox = new ObjMesh("Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
+	Object* fox = new ObjMesh("../Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
 
 	fox->material = new Material();
-	fox->material->setTexture("Resources/Models/FOKS/diffuse.bmp");
+	fox->material->setTexture("../Resources/Models/FOKS/diffuse.bmp");
 	fox->material->color = glm::vec3(1.0f, 0.0f, 0.0f);
 	fox->material->roughness = 1.f;
 	m_colliders.push_back(fox);
