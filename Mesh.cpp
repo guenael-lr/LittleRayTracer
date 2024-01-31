@@ -66,16 +66,16 @@ Mesh* Mesh::loadFromOBJ(const char* p_path)
 				switch (token[1])
 				{
 				case 't':	// TEXCOORD
-					m->v_TexCoords.push_back(v3);
+					m->m_VecTexCoords.push_back(v3); 
 					break;
 				case 'n':	// NORMAL
-					m->v_Normals.push_back(v3);
+					m->m_VecNormals.push_back(v3); 
 					break;
 				}
 			}
 			else // POSITION
 			{
-				m->v_Positions.push_back(v3);
+				m->m_VecPositions.push_back(v3);
 			}
 		}
 		break;
@@ -89,9 +89,9 @@ Mesh* Mesh::loadFromOBJ(const char* p_path)
 			for (int i = 0; i < 3; i++)
 			{
 				std::vector<std::string> indicesStr = split(tokenAndValues[i + 1], "/");
-				f.v_normal[i] = std::stoi(indicesStr[2]) - 1;
-				f.v_texcoord[i] = std::stoi(indicesStr[1]) - 1;
-				f.v_position[i] = std::stoi(indicesStr[0]) - 1;
+				f.m_normal[i] = std::stoi(indicesStr[2]) - 1;
+				f.m_texcoord[i] = std::stoi(indicesStr[1]) - 1;
+				f.m_position[i] = std::stoi(indicesStr[0]) - 1;
 			}
 
 			m->m_faces.push_back(f);

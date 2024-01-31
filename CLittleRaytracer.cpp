@@ -96,11 +96,7 @@ void LittleRaytracer::run()
 		return;
 	}
 
-	//init camera 
-
-
 	glm::ivec2 currentPixelCoordinates = glm::vec2(0, 0);
-	SDL_Thread* thread[4];
 	int m_nbThreads = 10;
 	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
 	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
@@ -236,18 +232,6 @@ glm::vec3 LittleRaytracer::raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_d
 		color += rch.hitMaterial->color;
 		
 	return color;
-	// EMISSIVE
-	glm::vec3 emissive(0, 0, 0);
-	if (rch.hitMaterial->emissive != glm::vec3(0, 0, 0))
-		emissive = rch.hitMaterial->emissive;			// LIGHT
-	// NORMAL REGARDING ROUGHNESS (MATERIAL)
-	glm::vec3 normal = glm::normalize(rch.hitNormal + rch.hitMaterial->roughness * glm::ballRand(1.0f)); // BE CAREFUL : normal can be (0,0,0) !
-	// DIRECT ILLUMINATION
-	glm::vec3 direct = raytrace(rch.hitPosition, normal, p_depth - 1); // ACCUMULATION
-	// INDIRECT ILLUMINATION
-	glm::vec3 reflected = raytrace(rch.hitPosition, glm::reflect(p_dir, normal), p_depth - 1);
-	// RESULT
-	return emissive + (direct + rch.hitMaterial->metallic * reflected) * color;
 
 }
 
@@ -291,17 +275,4 @@ float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_poi
     }
 
     return iLight + sLight;
-}
-
-int LittleRaytracer::RENDERLINE(void* data) {
-	ThreadData* threadData = (ThreadData*)data;
-	LittleRaytracer* raytracer = threadData->raytracer;
-	int line = threadData->p_line;
-	
-	for (int x = 0; x < raytracer->m_resolution.x; x++)
-	{
-		glm::vec3 color = raytracer->getPixelColor(glm::ivec2(x, line));
-		raytracer->updatePixelOnScreen(x, line, color);
-	}
-	return 0;
 }

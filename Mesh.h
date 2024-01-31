@@ -1,18 +1,12 @@
 #pragma once
 
 #include "Utils.h"
-
-#pragma pack(push,1)
-
 typedef struct {
-	int v_position[3];
-	int v_normal[3];
-	int v_texcoord[3];
+	int m_position[3];
+	int m_normal[3];
+	int m_texcoord[3];
 
 }faceDescriptor;
-
-#pragma pack(pop)
-
 
 class Mesh
 {
@@ -24,9 +18,9 @@ public:
 
 	static Mesh* loadFromOBJ(const char* p_path);
 
-	std::vector<glm::vec3> v_Positions;
-	std::vector<glm::vec3> v_Normals;
-	std::vector<glm::vec3> v_TexCoords;
+	std::vector<glm::vec3> m_VecPositions;
+	std::vector<glm::vec3> m_VecNormals;
+	std::vector<glm::vec3> m_VecTexCoords;
 	std::vector<faceDescriptor> m_faces;
 
 };
