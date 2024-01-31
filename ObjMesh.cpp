@@ -23,18 +23,24 @@ ObjMesh::ObjMesh(const char* p_path, glm::vec3 p_position, glm::quat p_quaternio
 	min = getPosInWorld(min);
 	max = getPosInWorld(max);
 
-	int nb_w = 1;
-	int nb_h = 2;
+	float nb_w = 5;
+	float nb_h = 5;
+	float nb_z = 5;
 
-	float w_x = (max.x - min.x) / nb_w;
-	float w_y = (max.y - min.y) / nb_h;
+	float w_x = (max.x - min.x) / nb_w ;
+	float w_y = (max.y - min.y) / nb_h ;
+	float w_z = (max.z - min.z) / nb_z ;
 
 	//create colliders
 	for (int i = 0; i < nb_w; i++) {
 		for (int j = 0; j < nb_h; j++) {
-			glm::vec3 min_collider = glm::vec3(min.x + i * w_x, min.y + j * w_y, min.z);
-			glm::vec3 max_collider = glm::vec3(min.x + (i + 1) * w_x, min.y + (j + 1) * w_y, max.z);
-			colliders.push_back(new AABB(min_collider, max_collider));
+			for (size_t k = 0; k < nb_z; k++)
+			{
+				glm::vec3 min_collider = glm::vec3(min.x + i * w_x, min.y + j * w_y, min.z + k * w_z);
+				glm::vec3 max_collider = glm::vec3(min.x + (i + 1) * w_x, min.y + (j + 1) * w_y, min.z + (k + 1) * w_z);
+				colliders.push_back(new AABB(min_collider, max_collider));
+
+			}
 		}
 	}
 
@@ -77,54 +83,51 @@ ObjMesh::~ObjMesh() {
 }
 
 bool ObjMesh::raycast(glm::vec3 p_origin, glm::vec3 p_dir, glm::vec2 p_interval, RaycastHit& p_hit) {
+	float min_t = INFINITY;
+	for (int i = 0; i < colliders.size(); i++) {
+		//check if the raycast intersect the collider
+		RaycastHit AABBHit;
+		if (colliders[i]->raycast(p_origin, p_dir, p_interval, AABBHit)) { 
+			RaycastHit hit;
+			for (int j = 0; j < faces_in_colliders[i].size(); ++j) {
+				//get the 3 vertices of the face
+				glm::vec3 v1 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[0]];
+				glm::vec3 v2 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[1]];
+				glm::vec3 v3 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[2]];
+				v1 = getPosInWorld(v1);
+				v2 = getPosInWorld(v2);
+				v3 = getPosInWorld(v3);
 
-	 for (int i = 0; i < colliders.size(); i++) {
-		 //check if the raycast intersect the collider
-		 RaycastHit AABBHit;
-		 if (colliders[i]->raycast(p_origin, p_dir, p_interval, AABBHit)) {
-			 float min_t = INFINITY;
-			 RaycastHit hit;
-			 for (int j = 0; j < faces_in_colliders[i].size(); ++j) {
-				 //get the 3 vertices of the face
-				 glm::vec3 v1 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[0]];
-				 glm::vec3 v2 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[1]];
-				 glm::vec3 v3 = mesh->m_VecPositions[faces_in_colliders[i][j].m_position[2]];
-				 v1 = getPosInWorld(v1);
-				 v2 = getPosInWorld(v2);
-				 v3 = getPosInWorld(v3);
+				glm::vec3 N = glm::normalize(glm::cross(v2 - v1, v3 - v1));
 
-				 glm::vec3 N = glm::normalize(glm::cross(v2 - v1, v3 - v1));
+				//check if the ray intersect the face
+				if (rayTriangleIntersect(p_origin, p_dir, v1, v2, v3, N, hit.t)) {
+					//set the hit informations
+					hit.hitPosition = p_origin + hit.t * glm::normalize(p_dir);
+					hit.hitNormal = glm::normalize(hit.hitPosition - m_position);
+					hit.hitCollider = this;
+					hit.hitMaterial = material;
+					hit.hitUV[0] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[0]];
+					hit.hitUV[1] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[1]];
+					hit.hitUV[2] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[2]];
+					hit.hitVertices[0] = v1;
+					hit.hitVertices[1] = v2;
+					hit.hitVertices[2] = v3;
+					if (min_t > hit.t) {
+						p_hit = hit;
+						min_t = hit.t;
 
-				 //check if the ray intersect the face
-				 if (rayTriangleIntersect(p_origin, p_dir, v1, v2, v3, N, hit.t)) {
-					 //set the hit informations
-					 hit.hitPosition = p_origin + hit.t * glm::normalize(p_dir);
-					 hit.hitNormal = glm::normalize(hit.hitPosition - m_position);
-					 hit.hitCollider = this;
-					 hit.hitMaterial = material;
-					 hit.hitUV[0] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[0]];
-					 hit.hitUV[1] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[1]];
-					 hit.hitUV[2] = mesh->m_VecTexCoords[faces_in_colliders[i][j].m_texcoord[2]];
-					 hit.hitVertices[0] = v1;
-					 hit.hitVertices[1] = v2;
-					 hit.hitVertices[2] = v3;
-					 if (min_t > hit.t) {
-						 p_hit = hit;
-						 min_t = hit.t;
+					}
 
-					 }
-
-				 }
-			 }
-			 if (min_t < INFINITY) {
-				 return true;
-			 }
-			 return false;
-
-		 }
-	 }
-	 return false;
-		};
+				}
+			}
+		}
+		
+	}
+	if (min_t < INFINITY) 
+		return true;
+	return false;
+};
 
 bool ObjMesh::rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::vec3& v0, glm::vec3& v1, glm::vec3& v2, glm::vec3& N, float& t) {
 	const float EPSILON = 0.0000001;
