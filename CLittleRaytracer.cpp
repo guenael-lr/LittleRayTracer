@@ -6,16 +6,16 @@
 LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_running(false),
 	m_withEffect(false),
-	m_window(NULL),
-	m_renderer(NULL),
+	m_window(nullptr),
+	m_renderer(nullptr),
 	m_resolution(p_outputRes),
-	m_camera(NULL),
-	m_pixelsAcc(NULL),
-	m_postProcessedPixels(NULL),
+	m_camera(nullptr),
+	m_pixelsAcc(nullptr),
+	m_postProcessedPixels(nullptr),
 	m_numFrame(1),
-	m_postProcessEffects({}),
-	m_nbThreads(std::thread::hardware_concurrency() * 3 / 4),
-	m_threads({})
+	m_nbThreads(.75f * std::thread::hardware_concurrency()),
+	m_threads({}),
+	m_postProcessEffects({})
 {
 }
 
@@ -62,7 +62,7 @@ int LittleRaytracer::init()
 	m_camera = new Camera(1.0f, glm::vec2( m_resolution.x/static_cast<float>(m_resolution.y), 1.0f) * 2.0f, 0.0f);
 
 
-	Object * sphere0 = new Sphere(glm::vec3(1, 1, 1), 1.0f);
+	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2.f), 1.0f);
 	sphere0->material->emissive= glm::vec3(2.0, 1.5, 1.5);
 	//sphere0->material.color = glm::vec3(1.0, 0.0, 0.0);
 	//sphere0->material.roughness = 0.1f;
@@ -104,10 +104,9 @@ int LittleRaytracer::init()
 	m_postProcessedPixels = new glm::vec3[m_resolution.x * m_resolution.y];
 	memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 	memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
-	m_postProcessEffects.emplace_back(new GammaCorrectionEffect());
 	m_postProcessEffects.emplace_back(new ToneMappingEffect(0.7f));
-	m_postProcessEffects.emplace_back(new GlowEffect(1.7f, 0.3f));
-	
+	m_postProcessEffects.emplace_back(new GlowEffect(1.f, 5, 3.f));
+	m_postProcessEffects.emplace_back(new GammaCorrectionEffect());
 	
 	return 0;
 }
@@ -216,9 +215,9 @@ void LittleRaytracer::run()
 							std::lock_guard<std::mutex> lck(m_mutex);
 							m_pixelsAcc[p_currentPixelCoordinates.y * m_resolution.x + currX] += color;
 							if (m_withEffect)
-								updatePixelOnScreen(currX, p_currentPixelCoordinates.y, m_postProcessedPixels[p_currentPixelCoordinates.y * m_resolution.x + currX] / (float)m_numFrame);
+								updatePixelOnScreen(currX, p_currentPixelCoordinates.y, m_postProcessedPixels[p_currentPixelCoordinates.y * m_resolution.x + currX]);
 							else
-								updatePixelOnScreen(currX, p_currentPixelCoordinates.y, m_pixelsAcc[p_currentPixelCoordinates.y * m_resolution.x + currX] / (float)m_numFrame);
+								updatePixelOnScreen(currX, p_currentPixelCoordinates.y, m_pixelsAcc[p_currentPixelCoordinates.y * m_resolution.x + currX] / static_cast<float>(m_numFrame));
 						}
 					
 
@@ -242,10 +241,20 @@ void LittleRaytracer::run()
 		}
 		else
 		{
+			//Normally post process should be before but it makes them softer to be late by one frame
 			m_numFrame++;
 			currentPixelCoordinates.y = 0;
-			for(PostProcessEffect* effect : m_postProcessEffects)
-				effect->applyPostProcess(m_pixelsAcc, m_postProcessedPixels, m_resolution.x, m_resolution.y, m_numFrame);
+			
+			if (m_postProcessEffects.empty())
+				continue;
+			
+			m_postProcessEffects[0]->applyPostProcess(m_pixelsAcc, m_postProcessedPixels, m_resolution.x, m_resolution.y, m_numFrame);
+
+			//apply Post effects over the first one applied
+			for(size_t i = 1; i < m_postProcessEffects.size(); ++i)
+				m_postProcessEffects[i]->applyPostProcess(m_postProcessedPixels, m_postProcessedPixels, m_resolution.x, m_resolution.y, 1);
+			
+			
 		}
 	}
 }
