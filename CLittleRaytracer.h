@@ -39,6 +39,9 @@ protected:
 	glm::vec3 * m_postProcessedPixels;
 	int m_numFrame;
 
+	unsigned int m_nbThreads;
+	std::vector<std::thread*> m_threads;
+	std::mutex m_mutex;
 	std::vector<PostProcessEffect*> m_postProcessEffects;
 };
 
