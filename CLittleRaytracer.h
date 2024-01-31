@@ -2,9 +2,10 @@
 #include "Utils.h"
 #include "Camera.h"
 #include "Object.h"
+#include "PostProcessEffect.h"
 
-#define MAX_DEPTH	3
-#define NB_NORMALS  4
+#define MAX_DEPTH	4
+#define NB_NORMALS  3
 
 class LittleRaytracer
 {
@@ -15,18 +16,15 @@ public:
 
 protected:
 	int init();
-	
-	
-	glm::vec3 raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth);
-	float applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir);
-	void updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb);
+	void updatePixelOnScreen(int p_x, int p_y, glm::vec3 p_rgb) const;
 	glm::vec3 getPixelColor(glm::ivec2 p_pixel);
-	
+	glm::vec3 raytrace(glm::vec3 p_origin, glm::vec3 p_dir, int p_depth);
+	float applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_pointPosition, glm::vec3 p_normal, glm::vec3 p_eyeDir) const;
 	bool m_running;
 	
 	glm::ivec2 m_resolution;
 	glm::vec3* m_pixelsAcc;
-	
+	bool m_withEffect;
 	int m_numFrame;
 	SDL_Window* m_window;
 	SDL_Renderer* m_renderer;
@@ -35,6 +33,8 @@ protected:
 	std::mutex m_mutex;
 	Camera* m_camera;
 	std::vector<Object*> m_colliders;
-
+	unsigned int m_nbThreads;
+	std::vector<PostProcessEffect*> m_postProcessEffects;
+	glm::vec3* m_postProcessedPixels;
 };
 

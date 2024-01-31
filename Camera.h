@@ -4,9 +4,10 @@
 class Camera: public Entity3D
 {
 public :
-	Camera(float p_focalPlaneDistance = 1.0f, glm::vec2 p_focalPlaneSize = glm::vec2(2.0f,2.0f)) :Entity3D(),
+	Camera(float p_focalPlaneDistance = 1.0f, glm::vec2 p_focalPlaneSize = glm::vec2(2.0f,2.0f), float p_radiusPlaneAperture = 1.4f) :Entity3D(),
 		m_focalPlaneDistance(p_focalPlaneDistance),
-		m_focalPlaneSize(p_focalPlaneSize)
+		m_focalPlaneSize(p_focalPlaneSize),
+		m_radiusPlaneAperture(p_radiusPlaneAperture)
 	{}
 
 	void getFocalPlane(float& p_distance, glm::vec2& p_size) { p_distance = m_focalPlaneDistance; p_size = m_focalPlaneSize; }
@@ -30,10 +31,12 @@ public :
 		return glm::normalize( pixelInWorld - m_position);
 	}
 
+	float m_radiusPlaneAperture;
+	float m_focalPlaneDistance;
+	
+
 
 protected:
-	float m_focalPlaneDistance;
 	glm::vec2 m_focalPlaneSize;
-
 };
 

@@ -13,3 +13,4 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <algorithm>

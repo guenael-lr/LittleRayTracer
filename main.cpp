@@ -5,7 +5,7 @@
 
 int main(int argc, char** argv)
 {
-	glm::ivec2 res = glm::ivec2(640, 480);
+	glm::ivec2 res = glm::ivec2(1000, 1000);
 	if (argc > 2)
 	{
 		res.x = atoi(argv[1]);
