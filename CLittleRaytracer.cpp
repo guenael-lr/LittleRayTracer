@@ -130,8 +130,22 @@ void LittleRaytracer::run()
 	SDL_Event event;
 	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
 	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
+
+	//init time
+	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
+
+	//vector for time 
+	float SPF = 0.0f;
+
+
 	while (m_running)
 	{
+		if (m_numFrame > 1) {
+			std::string title = "Little Raytracer - " + std::to_string(SPF / (m_numFrame - 1)).substr(0, std::to_string(SPF / (m_numFrame - 1)).find(".") + 3) + "s per frame";
+			SDL_SetWindowTitle(m_window, title.c_str());
+		}
+		
+
 		while (SDL_PollEvent(&event))
 		{
 			switch (event.type)
@@ -243,6 +257,7 @@ void LittleRaytracer::run()
 		{
 			//Normally post process should be before but it makes them softer to be late by one frame
 			m_numFrame++;
+
 			currentPixelCoordinates.y = 0;
 			
 			if (m_postProcessEffects.empty())
@@ -254,7 +269,12 @@ void LittleRaytracer::run()
 			for(size_t i = 1; i < m_postProcessEffects.size(); ++i)
 				m_postProcessEffects[i]->applyPostProcess(m_postProcessedPixels, m_postProcessedPixels, m_resolution.x, m_resolution.y, 1);
 			
+			//get time
+			std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
 			
+			float delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000.F;
+			SPF += delta;
+			start = end;
 		}
 	}
 }
