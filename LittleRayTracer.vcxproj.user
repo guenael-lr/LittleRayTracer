@@ -7,6 +7,7 @@
     </LocalDebuggerCommandArguments>
     <RemoteDebuggerCommandArguments>640 480</RemoteDebuggerCommandArguments>
     <LocalDebuggerCommand />
+    <LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>$(SolutionDir)bin/</LocalDebuggerWorkingDirectory>
@@ -15,5 +16,6 @@
     </LocalDebuggerCommandArguments>
     <RemoteDebuggerCommandArguments>256 256</RemoteDebuggerCommandArguments>
     <LocalDebuggerCommand />
+    <LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>
   </PropertyGroup>
 </Project>

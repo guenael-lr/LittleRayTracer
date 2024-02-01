@@ -37,8 +37,7 @@ bool AABB::raycast(glm::vec3 p_originWorld, glm::vec3 p_dirWorld, glm::vec2 p_in
 	p_hit.hitPosition = p_originWorld + t * p_dirWorld;
 	p_hit.hitNormal = glm::vec3(0, 0, 0);
 	p_hit.hitCollider = this;
-	p_hit.hitMaterial = new Material();
-	p_hit.hitMaterial->color = //red for debug *
+	p_hit.hitMaterial.color = //red for debug *
 		glm::vec3(1, 0, 0);
 	return true;
 }
