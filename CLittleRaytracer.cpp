@@ -97,7 +97,8 @@ int LittleRaytracer::init()
 	fox->material = new Material();
 	fox->material->setTexture("../Resources/Models/FOKS/diffuse.bmp");
 	fox->material->color = glm::vec3(1.0f, 0.0f, 0.0f);
-	fox->material->roughness = 1.f;
+	fox->material->roughness = 0.8f;
+	fox->material->metallic = 0.5f;
 	m_colliders.push_back(fox);
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
