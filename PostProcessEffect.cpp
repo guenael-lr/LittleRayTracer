@@ -1,172 +1,105 @@
 ﻿#include "PostProcessEffect.h"
-#include "CLittleRaytracer.h"
 
-void GlowEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
+// https://learnopengl.com/Advanced-Lighting/Bloom#:~:text=This%20light%20bleeding%2C%20or%20glow,scene%20a%20glow-like%20effect.
+// ressource for glowing
+
+void GlowEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int& p_resolutionX, const int& p_resolutionY, const int& p_numFrame) 
 {
-	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
-	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
+	// Cree un tableau temporaire pour stocker l'image post process
+	auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];                
 	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
+	
+    // Apply luminosity threshold
+    for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
+    {
+	    auto tempPixel = p_scenePixels[i] / static_cast<float>(p_numFrame);
+    	 tempImage[i] = dot(tempPixel, glm::vec3(0.2126f, 0.7152f, 0.0722f)) > m_luminosityThreshold ? tempPixel : glm::vec3(0.f);
+    }
 
-	// Applique le filtre bilat�ral en deux passes (horizontal et vertical)
-	bilateralFilter(tempImage, p_postProcessedScenePixels, p_resolutionX, p_resolutionY);
-
-	// Libere la memoire du tableau temporaire
+    // Apply blur passes
+    for (unsigned int pass = 0; pass < m_nbBlurPass; ++pass)
+        applyBilinearFiltering(tempImage, p_resolutionX, p_resolutionY);
+	
+    // Final compositing
+    for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
+    {
+        tempImage[i] += p_scenePixels[i] / static_cast<float>(p_numFrame);
+        p_postProcessedScenePixels[i] = glm::vec3(1.0f) - exp(-tempImage[i] * m_exposure);
+    }
 	delete[] tempImage;
 }
 
-void GlowEffect::bilateralFilter(glm::vec3* p_input, glm::vec3* p_output, const int p_width, const int p_height)
+void GlowEffect::applyBilinearFiltering(glm::vec3* p_pixels, const int& p_resolutionX, const int& p_resolutionY)
 {
-	// Calculez le rayon du filtre en fonction de l'�cart-type spatial
-	const int radius = static_cast<int>(ceil(m_sigmaSpace * 3.0f));
+    constexpr float weights[5] = {0.227027f, 0.1945946f, 0.1216216f, 0.054054f, 0.016216f};
 
-	// Cr�ez un tableau temporaire pour stocker l'image apr�s le filtre spatial
-	const auto tempImage = new glm::vec3[p_width * p_height];
+    // Temporary buffer for the horizontal pass
+    auto horizontalBuffer = new glm::vec3[p_resolutionX * p_resolutionY];
 
-	// Applique le filtre spatial en deux passes (horizontal et vertical)
-	spatialFilter(p_input, tempImage, p_width, p_height, radius);
+    // Horizontal pass
+    for (int j = 0; j < p_resolutionY; ++j)
+    {
+        for (int i = 0; i < p_resolutionX; ++i)
+        {
+            const int currIndex = j * p_resolutionX + i;
+            glm::vec3 blurredPixel = weights[0] * p_pixels[currIndex];
 
-	// Applique le filtre de couleur
-	colorFilter(tempImage, p_output, p_width, p_height, radius);
+            for (int k = 1; k < 5; ++k)
+            {
+                blurredPixel += weights[k] * p_pixels[glm::clamp(currIndex + k, 0, p_resolutionX * p_resolutionY - 1)];
+                blurredPixel += weights[k] * p_pixels[glm::clamp(currIndex - k, 0, p_resolutionX * p_resolutionY - 1)];
+            }
 
-	// Libere la memoire du tableau temporaire
-	delete[] tempImage;
+            horizontalBuffer[currIndex] = blurredPixel;
+        }
+    }
+
+    // Vertical pass directly onto the p_pixel buffer
+    for (int i = 0; i < p_resolutionX; ++i)
+    {
+        for (int j = 0; j < p_resolutionY; ++j)
+        {
+            const int currIndex = j * p_resolutionX + i;
+            glm::vec3 blurredPixel = weights[0] * horizontalBuffer[currIndex];
+
+            for (int k = 1; k < 5; ++k)
+            {
+                blurredPixel += weights[k] * horizontalBuffer[glm::clamp(currIndex + k * p_resolutionX, 0, p_resolutionX * p_resolutionY - 1)];
+                blurredPixel += weights[k] * horizontalBuffer[glm::clamp(currIndex - k * p_resolutionX, 0, p_resolutionX * p_resolutionY - 1)];
+            }
+
+            p_pixels[currIndex] = blurredPixel;
+        }
+    }
+
+    // Clean up temporary buffer
+    delete[] horizontalBuffer;
 }
 
-void GlowEffect::spatialFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int p_radius)
+void GammaCorrectionEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int& p_resolutionX, const int& p_resolutionY, const
+                                             int& p_numFrame)
 {
-	// Calcule les poids du filtre spatial
-	auto weights = new float[2 * p_radius + 1];
-	float sum = 0.0f;
-	for (int i = -p_radius; i <= p_radius; i++)
-	{
-		weights[i + p_radius] = expf(-static_cast<float>(i * i) / (2.0f * m_sigmaSpace * m_sigmaSpace));
-		sum += weights[i + p_radius];
-	}
-
-	// Normalise les poids
-	for (int i = 0; i < 2 * p_radius + 1; i++)
-		weights[i] /= sum;
-
-	// Applique le filtre spatial en deux passes (horizontal et vertical)
-	for (int pass = 0; pass < 2; pass++)
-	{
-		// Parcoure chaque ligne de l'image
-		for (int y = 0; y < p_height; y++)
-		{
-			// Parcoure chaque colonne de l'image
-			for (int x = 0; x < p_width; x++)
-			{
-				// Calcule la couleur filtree pour le pixel (x, y)
-				auto color = glm::vec3(0.0f);
-				for (int i = -p_radius; i <= p_radius; i++)
-				{
-					// Calcule la position du pixel voisin
-					int xNeighbor = x;
-					int yNeighbor = y;
-					if (pass == 0)
-						xNeighbor += i;
-					else
-						yNeighbor += i;
-
-					// Check si le pixel voisin est dans l'image
-					if (xNeighbor >= 0 && xNeighbor < p_width && yNeighbor >= 0 && yNeighbor < p_height)
-					{
-						// Calcule le poids du pixel voisin
-						float weight = weights[i + p_radius];
-
-						// Ajoute la couleur du pixel voisin � la couleur filtree
-						color += weight * p_input[yNeighbor * p_width + xNeighbor];
-					}
-				}
-
-				// Stocke la couleur filtree dans l'image de sortie
-				p_output[y * p_width + x] = color;
-			}
-		}
-	}
-
-	// Libere la m�moire des poids
-	delete[] weights;
-}
-
-void GlowEffect::colorFilter(glm::vec3* p_input, glm::vec3* p_output, int p_width, int p_height, int p_radius)
-{
-	// Calcule les poids du filtre de couleur
-	auto weights = new float[2 * p_radius + 1];
-	float sum = 0.0f;
-	for (int i = -p_radius; i <= p_radius; i++)
-	{
-		weights[i + p_radius] = expf(-static_cast<float>(i * i) / (2.0f * m_sigmaColor * m_sigmaColor));
-		sum += weights[i + p_radius];
-	}
-
-	// Normalise les poids
-	for (int i = 0; i < 2 * p_radius + 1; i++)
-		weights[i] /= sum;
-
-	// Applique le filtre de couleur en deux passes (horizontal et vertical)
-	for (int pass = 0; pass < 2; pass++)
-	{
-		// Parcoure chaque ligne de l'image
-		for (int y = 0; y < p_height; y++)
-		{
-			// Parcourez chaque colonne de l'image
-			for (int x = 0; x < p_width; x++)
-			{
-				// Calcule la couleur filtr�e pour le pixel (x, y)
-				auto color = glm::vec3(0.0f);
-				for (int i = -p_radius; i <= p_radius; i++)
-				{
-					// Calcule la position du pixel voisin
-					int xNeighbor = x;
-					int yNeighbor = y;
-					if (pass == 0)
-						xNeighbor += i;
-					else
-						yNeighbor += i;
-
-					// Assure-vous que le pixel voisin est dans l'image
-					if (xNeighbor >= 0 && xNeighbor < p_width && yNeighbor >= 0 && yNeighbor < p_height)
-					{
-						// Calcule le poids du pixel voisin
-						float weight = weights[i + p_radius];
-
-						// Ajoute la couleur du pixel voisin a la couleur filtree
-						color += weight * p_input[yNeighbor * p_width + xNeighbor];
-					}
-				}
-
-				// Stocke la couleur filtr�e dans l'image
-				p_output[y * p_width + x] = color;
-			}
-		}
-	}
-
-	// Libere la memoire des poids
-	delete[] weights;
-}
-
-void GammaCorrectionEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
-{
-	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
+	// Cree un tableau temporaire pour stocker l'image post process
 	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
+	
 	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
-
 	// apply gamma correction on accumulated pixels with r g b
 	for (int i = 0; i < p_resolutionX * p_resolutionY; i++)
 	{
-		tempImage[i].r = powf(tempImage[i].r / p_numFrame, 1.0f / m_gamma);
-		tempImage[i].g = powf(tempImage[i].g / p_numFrame, 1.0f / m_gamma);
-		tempImage[i].b = powf(tempImage[i].b / p_numFrame, 1.0f / m_gamma);
+		tempImage[i].g = powf(tempImage[i].g / static_cast<float>(p_numFrame), 1.f / m_gamma);
+		tempImage[i].b = powf(tempImage[i].b / static_cast<float>(p_numFrame), 1.f / m_gamma);
+		tempImage[i].r = powf(tempImage[i].r / static_cast<float>(p_numFrame), 1.f / m_gamma);
 	}
 
+	memcpy(p_postProcessedScenePixels, tempImage, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
 	// Libere la memoire du tableau temporaire
 	delete[] tempImage;
 }
 
-void ToneMappingEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int p_resolutionX, const int p_resolutionY, int p_numFrame)
+void ToneMappingEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_postProcessedScenePixels, const int& p_resolutionX, const int& p_resolutionY, const
+                                         int& p_numFrame)
 {
-	// Cree un tableau temporaire pour stocker l'image apr�s le filtre bilateral
+	// Cree un tableau temporaire pour stocker l'image post process
 	const auto tempImage = new glm::vec3[p_resolutionX * p_resolutionY];
 	memcpy(tempImage, p_scenePixels, p_resolutionX * p_resolutionY * sizeof(glm::vec3));
 
@@ -174,7 +107,7 @@ void ToneMappingEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_
 	float averageLuminance = 0.0f;
 	for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
 	{
-		float luminance = 0.2126f * tempImage[i].r + 0.7152f * tempImage[i].g + 0.0722f * tempImage[i].b;
+		const float luminance = (0.2126f * tempImage[i].r + 0.7152f * tempImage[i].g + 0.0722f * tempImage[i].b) / static_cast<float>(p_numFrame);
 		averageLuminance += logf(0.00001f + luminance);
 	}
 	averageLuminance = expf(averageLuminance / (p_resolutionX * p_resolutionY));
@@ -182,7 +115,7 @@ void ToneMappingEffect::applyPostProcess(glm::vec3* p_scenePixels, glm::vec3* p_
 	// Apply Reinhard tone mapping
 	for (int i = 0; i < p_resolutionX * p_resolutionY; ++i)
 	{
-		p_postProcessedScenePixels[i] = tempImage[i] * (m_key / (1.0f + averageLuminance));
+		p_postProcessedScenePixels[i] = tempImage[i] / static_cast<float>(p_numFrame) * (m_key / (1.0f + averageLuminance));
 	}
 
 	// Libere la memoire du tableau temporaire
