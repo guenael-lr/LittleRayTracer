@@ -23,21 +23,21 @@ ObjMesh::ObjMesh(const char* p_path, glm::vec3 p_position, glm::quat p_quaternio
 	min = getPosInWorld(min);
 	max = getPosInWorld(max);
 
-	float nb_w = 5;
-	float nb_h = 5;
-	float nb_z = 5;
+	constexpr unsigned int nb_w = NB_AABB_DIVISIONS;
+	constexpr unsigned int nb_h = NB_AABB_DIVISIONS;
+	constexpr unsigned int nb_z = NB_AABB_DIVISIONS;
 
-	float w_x = (max.x - min.x) / nb_w ;
-	float w_y = (max.y - min.y) / nb_h ;
-	float w_z = (max.z - min.z) / nb_z ;
+	const float w_x = (max.x - min.x) / nb_w ;
+	const float w_y = (max.y - min.y) / nb_h ;
+	const float w_z = (max.z - min.z) / nb_z ;
 
 	//create colliders
-	for (int i = 0; i < nb_w; i++) {
-		for (int j = 0; j < nb_h; j++) {
-			for (size_t k = 0; k < nb_z; k++)
+	for (unsigned int i = 0; i < nb_w; i++) {
+		for (unsigned int j = 0; j < nb_h; j++) {
+			for (unsigned int k = 0; k < nb_z; k++)
 			{
-				glm::vec3 min_collider = glm::vec3(min.x + i * w_x, min.y + j * w_y, min.z + k * w_z);
-				glm::vec3 max_collider = glm::vec3(min.x + (i + 1) * w_x, min.y + (j + 1) * w_y, min.z + (k + 1) * w_z);
+				const auto min_collider = glm::vec3(min.x + i * w_x, min.y + j * w_y, min.z + k * w_z);
+				const auto max_collider = glm::vec3(min.x + (i + 1) * w_x, min.y + (j + 1) * w_y, min.z + (k + 1) * w_z);
 				colliders.push_back(new AABB(min_collider, max_collider));
 
 			}
@@ -47,11 +47,12 @@ ObjMesh::ObjMesh(const char* p_path, glm::vec3 p_position, glm::quat p_quaternio
 	//table of faces, add a face to a collider if a vertice is in the collider
 	for (int i = 0; i < colliders.size(); i++) {
 		faces_in_colliders.push_back(std::vector<faceDescriptor>());
-		for (int j = 0; j < mesh->m_faces.size(); j++) {
+		for (auto& face : mesh->m_faces)
+		{
 			//get the 3 vertices of the face
-			glm::vec3 v1 = mesh->m_VecPositions[mesh->m_faces[j].m_position[0]];
-			glm::vec3 v2 = mesh->m_VecPositions[mesh->m_faces[j].m_position[1]];
-			glm::vec3 v3 = mesh->m_VecPositions[mesh->m_faces[j].m_position[2]];
+			glm::vec3 v1 = mesh->m_VecPositions[face.m_position[0]];
+			glm::vec3 v2 = mesh->m_VecPositions[face.m_position[1]];
+			glm::vec3 v3 = mesh->m_VecPositions[face.m_position[2]];
 
 			//set vertices in world
 			v1 = getPosInWorld(v1);
@@ -60,25 +61,23 @@ ObjMesh::ObjMesh(const char* p_path, glm::vec3 p_position, glm::quat p_quaternio
 
 			//check if a vertice is in the collider
 			if (colliders[i]->isPointInside(v1) || colliders[i]->isPointInside(v2) || colliders[i]->isPointInside(v3)) {
-				faces_in_colliders[i].push_back(mesh->m_faces[j]);
+				faces_in_colliders[i].push_back(face);
 			}
 		}
 	}
-
-
-		}
+}
 
 ObjMesh::~ObjMesh() {
 	//clear all 
 	delete mesh;
+	
 	//delete collider
-	for (int i = 0; i < colliders.size(); i++) {
-		delete colliders[i];
-	}
+	for (const auto& collider : colliders)
+		delete collider;
+	
 	//delete faces
-	for (int i = 0; i < faces_in_colliders.size(); i++) {
-		faces_in_colliders[i].clear();
-	}
+	for (auto& faces_in_collider : faces_in_colliders)
+		faces_in_collider.clear();
 	faces_in_colliders.clear();
 }
 
@@ -124,24 +123,22 @@ bool ObjMesh::raycast(glm::vec3 p_origin, glm::vec3 p_dir, glm::vec2 p_interval,
 		}
 		
 	}
-	if (min_t < INFINITY) 
-		return true;
-	return false;
+	return min_t < INFINITY;
 };
 
-bool ObjMesh::rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::vec3& v0, glm::vec3& v1, glm::vec3& v2, glm::vec3& N, float& t) {
-	const float EPSILON = 0.0000001;
+bool ObjMesh::rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::vec3& p_v0, glm::vec3& p_v1, glm::vec3& p_v2, glm::vec3& p_n, float& p_t) {
+	constexpr float EPSILON = 0.0000001f;
 	glm::vec3 edge1, edge2, h, s, q;
 	float a, f, u, v;
-	edge1 = v1 - v0;
-	edge2 = v2 - v0;
+	edge1 = p_v1 - p_v0;
+	edge2 = p_v2 - p_v0;
 	h = glm::cross(p_dir, edge2);
 	a = glm::dot(edge1, h);
 	if (a > -EPSILON && a < EPSILON)
-		return false;    // Le rayon est parallèle au triangle.
+		return false;    // Le rayon est parallele au triangle.
 
-	f = 1.0 / a;
-	s = p_origin - v0;
+	f = 1.0f / a;
+	s = p_origin - p_v0;
 	u = f * glm::dot(s, h);
 	if (u < 0.0 || u > 1.0)
 		return false;
@@ -151,13 +148,6 @@ bool ObjMesh::rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::v
 		return false;
 
 	// On calcule t pour savoir ou le point d'intersection se situe sur la ligne.
-	t = f * glm::dot(edge2, q);
-	if (t > EPSILON && glm::dot(p_dir, N) < EPSILON) // Intersection avec le rayon
-	{
-		return true;
-	}
-	else // On a bien une intersection de droite, mais pas de rayon.
-		return false;
-
-
+	p_t = f * glm::dot(edge2, q);
+	return p_t > EPSILON && glm::dot(p_dir, p_n) < EPSILON ? true : false;
 }

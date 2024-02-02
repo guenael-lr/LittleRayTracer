@@ -26,6 +26,6 @@ class ObjMesh : public Object
 		
 		bool raycast(glm::vec3 p_origin, glm::vec3 p_dir, glm::vec2 p_interval, RaycastHit& p_hit);
 
-		bool rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::vec3& v0, glm::vec3& v1, glm::vec3& v2, glm::vec3& N, float& t);
+	static bool rayTriangleIntersect(glm::vec3& p_origin, glm::vec3& p_dir, glm::vec3& p_v0, glm::vec3& p_v1, glm::vec3& p_v2, glm::vec3& p_n, float& p_t);
 	
 };

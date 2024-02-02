@@ -4,8 +4,6 @@
 #include "Object.h"
 #include "PostProcessEffect.h"
 
-#define MAX_DEPTH	10
-#define NB_NORMALS  10
 
 class LittleRaytracer
 {

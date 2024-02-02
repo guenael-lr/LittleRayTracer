@@ -13,7 +13,7 @@ LittleRaytracer::LittleRaytracer(glm::ivec2 p_outputRes) :
 	m_pixelsAcc(nullptr),
 	m_postProcessedPixels(nullptr),
 	m_numFrame(1),
-	m_nbThreads(.75f * std::thread::hardware_concurrency() * 3 / 4),
+	m_nbThreads(NB_THREADS),
 	m_threads({}),
 	m_postProcessEffects({})
 {
@@ -63,51 +63,56 @@ int LittleRaytracer::init()
 
 
 	Object * sphere0 = new Sphere(glm::vec3(1, 1, -2.f), 1.0f);
-	sphere0->material.emissive= glm::vec3(2.0, 1.5, 1.5);
+	sphere0->material.emissive= glm::vec3(3.f, 2.5f, 1.f);
 	//sphere0->material.color = glm::vec3(1.0, 0.0, 0.0);
 	//sphere0->material.roughness = 0.1f;
 	m_colliders.push_back(sphere0);
 	
+	//Ground sphere
 	Object* sphere1 = new Sphere(glm::vec3(0, -100.5f, -1), 100.0f);
 	sphere1->material.color = glm::vec3(1.0, 1.0, 1.0);
-	sphere1->material.roughness = 0.5f;
+	sphere1->material.roughness = 0.3f;
 	m_colliders.push_back(sphere1);
-
-	/*Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
-	sphere2->material->color = glm::vec3(0.0, 0.0, 1.0);
-	sphere2->material->roughness = 0.5f;
-	m_colliders.push_back(sphere2);
-
-	Object* sphere4 = new Sphere(glm::vec3(0, 0, -1.0), 0.5f);
-	sphere4->material->color = glm::vec3(0.0, 1.0, 0.0);
-	sphere4->material->roughness = 0.5f;
-	m_colliders.push_back(sphere4);
-
-	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
-	sphere3->material->color = glm::vec3(0.0, 0.0, 1.0);
-	sphere3->material->roughness = 0.5f;
-	m_colliders.push_back(sphere3);*/
-
-	/*for (int i = 0; i < 6; i++)
-		m_colliders.push_back(new Sphere(glm::ballRand(0.5f) + glm::vec3(0, 0, -1), glm::linearRand(0.1f, 0.2f) ));*/
-
-
+	
+#if RENDER_OBJ
 	Object* fox = new ObjMesh("../Resources/Models/FOKS/FOKS.obj", glm::vec3(0, -0.5f, -0.5f), glm::vec3(0, 0, 0));
 
 	fox->material.setTexture("../Resources/Models/FOKS/diffuse.bmp");
 	fox->material.color = glm::vec3(1.0f, 0.0f, 0.0f);
-	fox->material.roughness = 0.8f;
-	fox->material.metallic = 0.2f;
+	fox->material.roughness = 0.6f;
+	fox->material.metallic = 0.4f;
 	m_colliders.push_back(fox);
+#else
+	Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
+	sphere2->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere2->material.roughness = 0.5f;
+	m_colliders.push_back(sphere2);
+
+	Object* sphere4 = new Sphere(glm::vec3(0, 0, -1.0), 0.5f);
+	sphere4->material.color = glm::vec3(0.0, 1.0, 0.0);
+	sphere4->material.roughness = 0.5f;
+	m_colliders.push_back(sphere4);
+
+	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
+	sphere3->material.color = glm::vec3(0.0, 0.0, 1.0);
+	sphere3->material.roughness = 0.5f;
+	m_colliders.push_back(sphere3);
+#endif
 
 	m_pixelsAcc = new glm::vec3[m_resolution.x * m_resolution.y];
 	m_postProcessedPixels = new glm::vec3[m_resolution.x * m_resolution.y];
 	memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 	memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
-	m_postProcessEffects.emplace_back(new ToneMappingEffect(0.7f));
-	m_postProcessEffects.emplace_back(new GlowEffect(1.f, 5, 3.f));
-	m_postProcessEffects.emplace_back(new GammaCorrectionEffect(1));
 	
+#if USE_TONEMAPPING
+	m_postProcessEffects.emplace_back(new ToneMappingEffect(TONEMAPPING_KEY));
+#endif
+#if USE_GLOW
+	m_postProcessEffects.emplace_back(new GlowEffect(GLOW_LUMINOSITY_THRESHOLD, GLOW_NB_BLUR_PASS, GLOW_EXPOSURE));
+#endif
+#if USE_GAMMA
+	m_postProcessEffects.emplace_back(new GammaCorrectionEffect(GAMMA_VALUE));
+#endif
 	return 0;
 }
 
@@ -128,9 +133,6 @@ void LittleRaytracer::run()
 	m_numFrame = 1;
 	m_withEffect = false;
 	SDL_Event event;
-	unsigned int pixelsPerThread = m_resolution.x / m_nbThreads;
-	unsigned int remainingPixelsPerThread = m_resolution.x % m_nbThreads;
-
 	//init time
 	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
 
@@ -172,40 +174,55 @@ void LittleRaytracer::run()
 						m_withEffect = !m_withEffect;
 						break;
 					case SDLK_p:
-						// add 1.0f to the focal plane distance
-						m_camera->m_focalPlaneDistance += 0.1f;
+						// add 0.01f to the distance of the focal plane
+						m_camera->m_focalPlaneDistance += 0.01f;
 						// reset the pixel accumulator
 						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 						// reset the number of frame
 						m_numFrame = 1;
 						currentPixelCoordinates.x = 0;
 						currentPixelCoordinates.y = 0;
 						break;
 					case SDLK_m:
-						// remove 1.0f to the focal plane distance
-						m_camera->m_focalPlaneDistance -= 0.1f;
+						// remove 0.01f to the distance of the focal plane
+						m_camera->m_focalPlaneDistance -= 0.01f;
 						// reset the pixel accumulator
 						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 						// reset the number of frame
 						m_numFrame = 1;
 						currentPixelCoordinates.x = 0;
 						currentPixelCoordinates.y = 0;
 						break;
 					case SDLK_l:
-						// remove 1.0f to the focal plane distance
-						m_camera->m_radiusPlaneAperture -= 0.1f;
+						// remove 0.01f to the radius of the aperture
+						m_camera->m_radiusPlaneAperture -= 0.01f;
 						// reset the pixel accumulator
 						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 						// reset the number of frame
 						m_numFrame = 1;
 						currentPixelCoordinates.x = 0;
 						currentPixelCoordinates.y = 0;
 						break;
 					case SDLK_o:
-						// add 1.0f to the focal plane distance
-						m_camera->m_radiusPlaneAperture += 0.1f;
+						// add 0.01f to the radius of the aperture
+						m_camera->m_radiusPlaneAperture += 0.01f;
 						// reset the pixel accumulator
 						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						// reset the number of frame
+						m_numFrame = 1;
+						currentPixelCoordinates.x = 0;
+						currentPixelCoordinates.y = 0;
+						break;
+					case SDLK_d:
+						//Reset focus plane distance and aperture radius
+						m_camera->m_radiusPlaneAperture = 0.f;
+						m_camera->m_focalPlaneDistance = 1.f;
+						memset(m_pixelsAcc, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
+						memset(m_postProcessedPixels, 0, m_resolution.x * m_resolution.y * sizeof(glm::vec3));
 						// reset the number of frame
 						m_numFrame = 1;
 						currentPixelCoordinates.x = 0;
@@ -272,7 +289,7 @@ void LittleRaytracer::run()
 			//get time
 			std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
 			
-			float delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000.F;
+			float delta = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000.f;
 			SPF += delta;
 			start = end;
 		}
@@ -363,16 +380,14 @@ float LittleRaytracer::applyDirectLighting(glm::vec3 p_posLight, glm::vec3 p_poi
 	glm::vec3 lightDir = glm::normalize(p_posLight - p_pointPosition);
 
 	RaycastHit rch;
-	bool collided = false;
 	auto interval = glm::vec2(0.001f, INFINITY);
-	for (auto collider : m_colliders)
+	for (auto* collider : m_colliders)
 	{
 		RaycastHit rchIt;
 		if (collider->raycast(p_pointPosition, lightDir, interval, rchIt) && rchIt.t < interval.y)
 		{
 			interval.y = rchIt.t;
 			rch = rchIt;
-			collided = true;
 		}
 	}
 

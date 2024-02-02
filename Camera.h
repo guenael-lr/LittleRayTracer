@@ -4,11 +4,11 @@
 class Camera: public Entity3D
 {
 public :
-	Camera(float p_focalPlaneDistance = 1.0f, glm::vec2 p_focalPlaneSize = glm::vec2(2.0f,2.0f), float p_radiusPlaneAperture = 1.4f) :Entity3D(),
+	Camera(float p_focalPlaneDistance = 1.0f, glm::vec2 p_focalPlaneSize = glm::vec2(2.0f,2.0f), float p_radiusPlaneAperture = 0.f) :
+		m_radiusPlaneAperture(p_radiusPlaneAperture),
 		m_focalPlaneDistance(p_focalPlaneDistance),
-		m_focalPlaneSize(p_focalPlaneSize),
-		m_radiusPlaneAperture(p_radiusPlaneAperture)
-	{}
+		m_focalPlaneSize(p_focalPlaneSize)
+	{ }
 
 	void getFocalPlane(float& p_distance, glm::vec2& p_size) { p_distance = m_focalPlaneDistance; p_size = m_focalPlaneSize; }
 	
@@ -25,8 +25,8 @@ public :
 			+ m_focalPlaneSize.y / 2.0f * upDirFocalPlaneInWorld;
 
 		glm::vec3 pixelInWorld= plane00InWorld 
-									+ pixelMultiSampling.x / (float)p_resolution.x * m_focalPlaneSize.x * rightDirFocalPlaneInWorld
-									- pixelMultiSampling.y / (float)p_resolution.y * m_focalPlaneSize.y * upDirFocalPlaneInWorld;
+									+ pixelMultiSampling.x / static_cast<float>(p_resolution.x) * m_focalPlaneSize.x * rightDirFocalPlaneInWorld
+									- pixelMultiSampling.y / static_cast<float>(p_resolution.y) * m_focalPlaneSize.y * upDirFocalPlaneInWorld;
 
 		return glm::normalize( pixelInWorld - m_position);
 	}
