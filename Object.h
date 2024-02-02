@@ -8,7 +8,7 @@
 class Object: public Entity3D, public Collider
 {
 public:
-	Object(glm::vec3 p_position = glm::vec3(0, 0, 0), glm::quat p_quaternion = glm::quat(1, 0, 0, 0)) :Entity3D(p_position, p_quaternion) 
+	Object(glm::vec3 p_position = glm::vec3(0, 0, 0), glm::quat p_quaternion = glm::quat(1, 0, 0, 0)) :Entity3D(p_position, p_quaternion)
 	{
 		material.emissive = glm::vec3(0, 0, 0);
 		material.color = glm::vec3(glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f), glm::linearRand(0.0f, 1.0f));
