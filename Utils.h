@@ -32,7 +32,7 @@
 #define GLOW_NB_BLUR_PASS 5
 #define GLOW_LUMINOSITY_THRESHOLD 1.f
 #define TONEMAPPING_KEY 1.2f
-#define GAMMA_VALUE 1.33f
+#define GAMMA_VALUE 1.5f
 
 //If enabled, will render the foks model, otherwise some spheres
-#define RENDER_OBJ 0
+#define RENDER_OBJ 1
