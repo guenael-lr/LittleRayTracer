@@ -8,8 +8,11 @@ struct RaycastHit {
 	float t;
 	glm::vec3 hitPosition;
 	glm::vec3 hitNormal;
+	glm::vec3 hitUV[3];
 	Collider* hitCollider;
 	Material hitMaterial;
+	glm::vec3 hitVertices[3];
+
 };
 
 class Collider
