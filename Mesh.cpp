@@ -12,7 +12,6 @@ Mesh::~Mesh()
 
 std::vector<std::string> split(std::string p_text, const char* p_delims)
 {
-	//https://stackoverflow.com/questions/236129/how-do-i-iterate-over-the-words-of-a-string
 	std::vector<std::string> tokens;
 	std::size_t start = p_text.find_first_not_of(p_delims), end = 0;
 
