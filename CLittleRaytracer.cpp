@@ -83,18 +83,18 @@ int LittleRaytracer::init()
 	fox->material.metallic = 0.4f;
 	m_colliders.push_back(fox);
 #else
-	Object* sphere2 = new Sphere(glm::vec3(-1, 0, -1.0), 0.5f);
-	sphere2->material.color = glm::vec3(0.0, 0.0, 1.0);
+	Object* sphere2 = new Sphere(glm::vec3(-1.f, 0.f, -1.f), 0.5f);
+	sphere2->material.color = glm::vec3(0.0f, 0.0f, 1.0f);
 	sphere2->material.roughness = 0.5f;
 	m_colliders.push_back(sphere2);
 
-	Object* sphere4 = new Sphere(glm::vec3(0, 0, -1.0), 0.5f);
-	sphere4->material.color = glm::vec3(0.0, 1.0, 0.0);
+	Object* sphere4 = new Sphere(glm::vec3(0.f, 0.f, -1.0f), 0.5f);
+	sphere4->material.color = glm::vec3(0.0f, 1.0f, 0.0f);
 	sphere4->material.roughness = 0.5f;
 	m_colliders.push_back(sphere4);
 
-	Object* sphere3 = new Sphere(glm::vec3(0.7, 0, -0.2), 0.5f);
-	sphere3->material.color = glm::vec3(0.0, 0.0, 1.0);
+	Object* sphere3 = new Sphere(glm::vec3(0.7f, 0.f, -0.2f), 0.5f);
+	sphere3->material.color = glm::vec3(0.0f, 0.0f, 1.0f);
 	sphere3->material.roughness = 0.5f;
 	m_colliders.push_back(sphere3);
 #endif
